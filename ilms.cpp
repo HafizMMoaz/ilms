@@ -1426,7 +1426,7 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                 
                 labDepartemtID[labDepartmentCount] = id;
                 labDepartmentName[labDepartmentCount] = name;
-                labDepartmentDate[labDepartmentCount] = "2024-11-15";
+                labDepartmentDate[labDepartmentCount] = "2024-11-16";
                 labDepartmentCount++;
             }
             else{
