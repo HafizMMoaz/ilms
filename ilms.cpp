@@ -40,35 +40,37 @@ bool sessionEnd();
 string session(string);
 string _SESSION[4];
 
+//& control variables
 string _ACTIVE_SCREEN = "SPLASH", _ACTIVE_PAGE = "DASHBOARD", _ACTIVE_CONTROL = "SIDEBAR", _ACTIVE_ACTION = "VIEW";
 
+//& datasize that can be stored
 const int dataSize = 3;
 
-/* users data */
+//^ users data
 string userID[dataSize]= {"U000", "U001", "U002"}, userFname[dataSize] = {"Hafiz", "Muhammad", "Moaz"}, userName[dataSize] = {"hafiz", "muhammad", "moaz"}, userEmail[dataSize],
 userPassword[dataSize] = {"1234", "5678", "1452"}, userPhone[dataSize], userAddress[dataSize], userRole[dataSize] = {"R000", "R007", "R009"}, userLocation[dataSize];
 bool userIsActive[dataSize] = {true, true, true};
 
-/* specimen */
+//^ specimen
 string specimenID[dataSize], specimenName[dataSize], specimenDescription[dataSize];
 int specimenCount = 0;
 
-/* lab department */
+//^ lab department
 string labDepartemtID[dataSize], labDepartmentName[dataSize], labDepartmentDate[dataSize];
 int labDepartmentCount = 0;
 
-/* lab Test */
+//^ lab Test
 string labTestID[dataSize], labTestName[dataSize], labTestRate[dataSize], labTestGroup[dataSize], labTestMachine[dataSize], labTestUnit[dataSize], labTestFreq[dataSize], labTestTime[dataSize], labTestComments[dataSize], labTestSpecimen[dataSize];
 int labTestCount = 0;
 
 main()
 {
     screenSetup(105, 40, 120, 40);
-    /* roles */
+    //& roles
     string roles_id[11] = {"R000", "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009", "R010"};
     string roles_name[11] = {"Receptionist", "Phelbotomist", "Technician", "Companies & Doctors", "Courier", "Home Sampling", "Collection Center", "Manager", "Admin", "Super Admin"};
 
-    /* menus */
+    //& menus
     string splashMenu[2] = {"\033[4mL\033[0mOGIN", "\033[4mE\033[0mXIT"};
     string sideBar[10] = {"\033[4mD\033[0mASHBOARD", "\033[4mS\033[0mETUP", "\033[4mP\033[0mATIENT", "\033[4mC\033[0mOORPARATE", "\033[4mT\033[0mEST", "\033[4mW\033[0mORKSHEET", "\033[4mH\033[0mOME SAMPLING", "C\033[4mO\033[0mURIER", "\033[4mF\033[0mINANCE", "\033[4mR\033[0mEPORTS"};
     string setupMenu[8] = {"\033[4mS\033[0mpecimen", "\033[4mL\033[0mab Departments", "Lab \033[4mT\033[0mests", "\033[4mP\033[0mackages", "Test \033[4mR\033[0mate List", "\033[4mM\033[0machines", "S\033[4mO\033[0mPs", "\033[4mB\033[0mack"};
