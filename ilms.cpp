@@ -1,9 +1,8 @@
 #include <iostream>
 #include <windows.h>
 #include <conio.h>
-#include<ios> //used to get stream size
-#include<limits> //used to get numeric limits
 using namespace std;
+
 void gotoxy(int, int);                //~ controlling cursor position on console screen
 void screenSetup(int, int, int, int); //~ handeling console screen
 void setColor(int);                   //~ handling coloured ui on console screen
@@ -15,8 +14,9 @@ bool mainScreen(int, int);        //~ x-coord, y-coord
 
 //! pages
 bool dashboardPage(int, int);     //~ x-coord, y-coord
-bool specimenPage(int, int);      //~ x-coord, y-coord
-bool labDepartmentPage(int, int); //~ x-coord, y-coord
+bool specimenPage(int, int, string, string[], int, int);      //~ x-coord, y-coord
+bool labDepartmentPage(int, int, string, string[], int, int); //~ x-coord, y-coord
+bool labTestPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
 
 /* structural functionalities */
 bool title(int, int);
@@ -31,22 +31,31 @@ void contentMenu(string, string[], int, int); //~ page Name , menu name
 
 /* session */
 bool isSessionStated = false;
-bool sessionStart(int, string, string, string); //~ userID, Fullname , username , role
+bool sessionStart(string, string, string, string); //~ userID, Fullname , username , role
 bool sessionEnd();
 string session(string);
 string _SESSION[4];
 
-string _ACTIVE_SCREEN = "SPLASH", _ACTIVE_PAGE = "DASHBOARD", _ACTIVE_CONTROL = "SIDEBAR";
+string _ACTIVE_SCREEN = "SPLASH", _ACTIVE_PAGE = "DASHBOARD", _ACTIVE_CONTROL = "SIDEBAR", _ACTIVE_ACTION = "VIEW";
+
 const int dataSize = 3;
 
 /* users data */
-int userId[dataSize] = {10001, 10002, 10003};
-string userFname[dataSize] = {"Hafiz", "Muhammad", "Moaz"}, userName[dataSize] = {"hafiz", "muhammad", "moaz"}, userEmail[dataSize],
+string userID[dataSize]= {"U000", "U001", "U002"}, userFname[dataSize] = {"Hafiz", "Muhammad", "Moaz"}, userName[dataSize] = {"hafiz", "muhammad", "moaz"}, userEmail[dataSize],
        userPassword[dataSize] = {"1234", "5678", "1452"}, userPhone[dataSize], userAddress[dataSize], userRole[dataSize] = {"R000", "R007", "R009"}, userLocation[dataSize];
 bool userIsActive[dataSize] = {true, true, true};
 
 /* specimen */
-string specimenId[dataSize], specimenName[dataSize], specimenDescription[dataSize];
+string specimenID[dataSize] = {"S000", "S001", "S002"}, specimenName[dataSize] = {"3- 5cc Clotted Blood or Serum", "3cc EDTA BLOOD (CBC VIAL)", "24 Hrs urine & Serum"}, specimenDescription[dataSize] = {"Clotted Blood or Serum", "EDTA (CBC)", "24 Hrs urine & Serum"};
+int specimenCount = 0;
+
+/* lab department */
+string labDepartemtID[dataSize] = {"LD000", "LD001", "LD002"}, labDepartmentName[dataSize] = {"Histopathology", "Molecular Biology (PCR)", "Routine Chemistry"}, labDepartmentDate[dataSize] = {"2024-11-15", "2024-11-16", "2024-11-17"};
+int labDepartmentCount = 0;
+
+/* lab Test */
+string labTestID[dataSize], labTestName[dataSize], labTestRate[dataSize], labTestGroup[dataSize], labTestMachine[dataSize], labTestUnit[dataSize], labTestFreq[dataSize], labTestTime[dataSize], labTestComments[dataSize], labTestSpecimen[dataSize];
+int labTestCount = 0;
 
 main()
 {
@@ -132,21 +141,20 @@ main()
                 gotoxy(40, 29);  cout << "Enter your password  :";
                 gotoxy(65, 29);
                 cin >> password;
-
                 int userLocation = isLogin(username, password);
                 if (userLocation >= 0)
                 {
-                    int userID = userId[userLocation];
+                    string userId = userID[userLocation];
                     string fullname = userFname[userLocation];
                     string username = userName[userLocation];
                     string role = userRole[userLocation];
-                    if (sessionStart(userID, fullname, username, role))
+                    if (sessionStart(userId, fullname, username, role))
                     {
                         _ACTIVE_SCREEN = "MAIN";
                         continue;
                     }
                 }
-                gotoxy(40, 31); cout << "Invalid Credentials !\b";
+                gotoxy(40, 31); cout << "Invalid Credentials !";
                 Sleep(1000);
             }
         }
@@ -283,33 +291,172 @@ main()
                 }
             }
             else if (_ACTIVE_PAGE == "SPECIMEN")
-            {
-                if (clear(2, 3, 24, 37) && specimenPage(27, 4))
+            {   
+                option = 0;
+                size = sizeof(setupMenu) / sizeof(setupMenu[0]);
+                if (clear(2, 3, 24, 37) && specimenPage(27, 4, "SPECIMEN", setupMenu, option, size))
                 {
-                    option = 0;
-                    size = sizeof(setupMenu) / sizeof(setupMenu[0]);
                     sideBars("SPECIMEN", setupMenu, option, size);
-                    if (_ACTIVE_CONTROL == "CONTENT")
+                    if (_ACTIVE_CONTROL == "CONTENT" )
                     {
-                        option = 0;
-                        size = sizeof(innerContent) / sizeof(innerContent[0]);
-                        contentMenu("Specimen", innerContent, option, size);
+                        if (_ACTIVE_ACTION == "VIEW")
+                        {
+                            option = 0;
+                            size = sizeof(innerContent) / sizeof(innerContent[0]);
+                            contentMenu("Specimen", innerContent, option, size);
+                        }
+                        else if(_ACTIVE_ACTION == "ADD")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Specimen", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
                     }
                 }
             }
             else if (_ACTIVE_PAGE == "LABDEPARTMENT")
             {
-                if (clear(2, 3, 24, 37) && labDepartmentPage(27, 4))
+                option = 1;
+                size = sizeof(setupMenu) / sizeof(setupMenu[0]);
+                if (clear(2, 3, 24, 37) && labDepartmentPage(27, 4, "LAB DEPARTMENT", setupMenu, option, size))
                 {
                     option = 1;
                     size = sizeof(setupMenu) / sizeof(setupMenu[0]);
                     sideBars("LABDEPARTMENT", setupMenu, option, size);
                     if (_ACTIVE_CONTROL == "CONTENT")
                     {
-                        option = 0;
-                        size = sizeof(innerContent) / sizeof(innerContent[0]);
-                        contentMenu("Lab Department", innerContent, option, size);
+                        if (_ACTIVE_ACTION == "VIEW")
+                        {
+                            option = 0;
+                            size = sizeof(innerContent) / sizeof(innerContent[0]);
+                            contentMenu("Lab Department", innerContent, option, size);
+                        }
+                        else if(_ACTIVE_ACTION == "ADD"){
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Lab Department", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
                     }
+                    
+                }
+            }
+            else if (_ACTIVE_PAGE == "LABTEST")
+            {
+                option = 2;
+                size = sizeof(setupMenu) / sizeof(setupMenu[0]);
+                if (clear(2, 3, 24, 37) && labTestPage(27, 4, "LABTEST", setupMenu, option, size))
+                {
+                    option = 2;
+                    size = sizeof(setupMenu) / sizeof(setupMenu[0]);
+                    sideBars("LABTEST", setupMenu, option, size);
+                    if (_ACTIVE_CONTROL == "CONTENT")
+                    {
+                        if (_ACTIVE_ACTION == "VIEW")
+                        {
+                            option = 0;
+                            size = sizeof(innerContent) / sizeof(innerContent[0]);
+                            contentMenu("Lab Test", innerContent, option, size);
+                        }
+                        else if(_ACTIVE_ACTION == "ADD"){
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Lab Test", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
+                    }
+                    
                 }
             }
             else
@@ -371,13 +518,22 @@ void menu(string menu[], string heading, int size, int option, int x, int y)
             cout << " [" << op[i] << "] " << menu[i];
         }
     }
-    else if (heading == "Lab Department" || heading == "Specimen")
+    else if (heading == "Lab Department" || heading == "Specimen" || heading == "Lab Test")
     {
         for (int i = 0; i < size; i++)
         {
             gotoxy(x, y);
             cout << "[" << op[i] << "] " << menu[i] << " " << heading;
             x += 30;
+        }
+    }
+    else if (heading == "innerMenuADD")
+    {
+        for (int i = 0; i < size; i++)
+        {
+            gotoxy(x, y);
+            cout << "[" << op[i] << "] " << menu[i];
+            y += 2;
         }
     }
 }
@@ -430,23 +586,27 @@ void sideBars(string pageName, string subMenu[], int option, int size)
         }
         else if (GetAsyncKeyState(VK_RIGHT))
         {
-            _ACTIVE_CONTROL = "CONTENT";
-            if (_ACTIVE_PAGE == "SPECIMEN")
-                menu(subMenu, "SETUP", size, 0, 2, 3);
-            else if (_ACTIVE_PAGE == "LABDEPARTMENT")
-                menu(subMenu, "SETUP", size, 1, 2, 3);
-            else if (_ACTIVE_PAGE == "LABTEST")
-                menu(subMenu, "SETUP", size, 2, 2, 3);
-            else if (_ACTIVE_PAGE == "PACKAGES")
-                menu(subMenu, "SETUP", size, 3, 2, 3);
-            else if (_ACTIVE_PAGE == "TESTRATELIST")
-                menu(subMenu, "SETUP", size, 4, 2, 3);
-            else if (_ACTIVE_PAGE == "MACHINES")
-                menu(subMenu, "SETUP", size, 5, 2, 3);
-            else if (_ACTIVE_PAGE == "SOPS")
-                menu(subMenu, "SETUP", size, 6, 2, 3);
-            Sleep(100);
-            break;
+            if(_ACTIVE_ACTION == "VIEW")
+            {
+                 _ACTIVE_CONTROL = "CONTENT";
+                if (_ACTIVE_PAGE == "SPECIMEN")
+                    menu(subMenu, "SETUP", size, 0, 2, 3);
+                else if (_ACTIVE_PAGE == "LABDEPARTMENT")
+                    menu(subMenu, "SETUP", size, 1, 2, 3);
+                else if (_ACTIVE_PAGE == "LABTEST")
+                    menu(subMenu, "SETUP", size, 2, 2, 3);
+                else if (_ACTIVE_PAGE == "PACKAGES")
+                    menu(subMenu, "SETUP", size, 3, 2, 3);
+                else if (_ACTIVE_PAGE == "TESTRATELIST")
+                    menu(subMenu, "SETUP", size, 4, 2, 3);
+                else if (_ACTIVE_PAGE == "MACHINES")
+                    menu(subMenu, "SETUP", size, 5, 2, 3);
+                else if (_ACTIVE_PAGE == "SOPS")
+                    menu(subMenu, "SETUP", size, 6, 2, 3);
+                Sleep(100);
+                break;
+            }
+            
         }
         else if (GetAsyncKeyState(VK_SPACE))
         {
@@ -537,6 +697,18 @@ void contentMenu(string pageName, string subMenu[], int option, int size)
         }
         else if (GetAsyncKeyState(VK_SPACE))
         {
+            if(option == 0){
+                _ACTIVE_ACTION = "ADD";
+                break;
+            }
+            else if(option == 1){
+                _ACTIVE_ACTION = "EDIT";
+                break;
+            }
+            else if(option == 2){
+                _ACTIVE_ACTION = "DELETE";
+                break;
+            }
         }
         menu(subMenu, pageName, size, option, 27, 4);
         Sleep(200);
@@ -660,31 +832,214 @@ bool dashboardPage(int x, int y)
     }
     return true;
 }
-bool specimenPage(int x, int y)
+bool specimenPage(int x, int y, string title, string menu[], int option, int size)
 {
     if (mainScreen(0, 0))
     {
-        gotoxy(x, y); cout<<"[ ] ADD New Specimen";
-        gotoxy(x + 30, y); cout<<"[ ] EDIT Specimen";
-        gotoxy(x + 60, y); cout<<"[ ] DELETE Specimen";
-        y++;
-        gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-        gotoxy(x, y + 2); cout<<"| Sr |     ID     |              NAME              |              DESCRIPTION             |";
-        gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
+        if(_ACTIVE_ACTION == "VIEW")
+        {
+            gotoxy(x, y); cout<<"[ ] ADD New Specimen";
+            gotoxy(x + 30, y); cout<<"[ ] EDIT Specimen";
+            gotoxy(x + 60, y); cout<<"[ ] DELETE Specimen";
+            y++;
+            gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |                 \033[4mNAME\033[0m                 |             \033[4mDESCRIPTION\033[0m              |";
+            gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
+            int j = 4;
+            if(specimenCount == 0)
+            {
+                gotoxy(x, y + j);     cout<<"|                                  NO DATA ENTERED YET                                    |";
+                gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
+            }
+            else
+            {
+                for(int i = 0; i < specimenCount ; i++){
+                    gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
+                    gotoxy(x + 7 , y + j); cout << specimenID[i]; gotoxy(x + 12, y + j); cout << "|";
+                    gotoxy(x + 14 , y + j); cout << specimenName[i]; gotoxy(x + 51, y + j); cout << "|";
+                    gotoxy(x + 53 , y + j); cout << specimenDescription[i]; gotoxy(x + 90, y + j); cout << "|";
+                    gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
+                    j+=2;
+                }
+            }
+            
+        }
+        else if(_ACTIVE_ACTION == "ADD")
+        {
+            sideBars(title, menu, option, size);
+            
+            if(specimenCount < dataSize){
+                string id, name, description;
+                gotoxy(x, y); cout << "\033[4mADD NEW SPECIMEN\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Specimen Name : ";
+                gotoxy(x + 40, y+3);
+                cin.ignore();
+                getline(cin, name);
+                gotoxy(x, y+5); cout << "Enter the Specimen Description : ";
+                gotoxy(x + 40, y+5); getline(cin, description);
+
+                /* id calculation */
+                if(specimenCount == 0)
+                    id = "S001";
+                else{
+                    id = specimenID[specimenCount-1];
+                    int idx = id.length() - 1;
+                    while(idx >= 1)
+                    {
+                        if(id[idx] < '9')
+                        {
+                            id[idx] += 1;
+                            break;
+                        }
+                        else{
+                            id[idx] = '0';
+                            idx--;
+                        }
+                    }
+                }
+                
+                specimenID[specimenCount] = id;
+                specimenName[specimenCount] = name;
+                specimenDescription[specimenCount] = description;
+                specimenCount++;
+            }
+            else{
+                gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
+            }
+
+        }
     }
     return true;
 }
-bool labDepartmentPage(int x, int y)
+bool labDepartmentPage(int x, int y, string title, string menu[], int option, int size)
 {
     if (mainScreen(0, 0))
     {
-        gotoxy(x, y); cout<<"[ ] ADD New Lab Department";
-        gotoxy(x + 30, y); cout<<"[ ] EDIT Lab Department";
-        gotoxy(x + 60, y); cout<<"[ ] DELETE Lab Department";
-        y++;
-        gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-        gotoxy(x, y + 2); cout<<"| Sr |             NAME             |              DESCRIPTION             |      C-B     |";
-        gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
+        if(_ACTIVE_ACTION == "VIEW")
+        {
+            gotoxy(x, y); cout<<"[ ] ADD New Lab Department";
+            gotoxy(x + 30, y); cout<<"[ ] EDIT Lab Department";
+            gotoxy(x + 60, y); cout<<"[ ] DELETE Lab Department";
+            y++;
+            gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m   |                   \033[4mNAME\033[0m                    |              \033[4mDATE\033[0m              |";
+            gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
+            
+            int j = 4;
+            if(labDepartmentCount == 0)
+            {
+                gotoxy(x, y + j);     cout<<"|                                  NO DATA ENTERED YET                                    |";
+                gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
+            }
+            else
+            {
+                for(int i = 0; i < labDepartmentCount ; i++){
+                    gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
+                    gotoxy(x + 7 , y + j); cout << labDepartemtID[i]; gotoxy(x + 13, y + j); cout << "|";
+                    gotoxy(x + 15 , y + j); cout << labDepartmentName[i]; gotoxy(x + 57, y + j); cout << "|";
+                    gotoxy(x + 59 , y + j); cout << labDepartmentDate[i]; gotoxy(x + 90, y + j); cout << "|";
+                    gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
+                    j+=2;
+                }
+            }
+        }
+        else if(_ACTIVE_ACTION == "ADD")
+        {
+            sideBars(title, menu, option, size);
+            
+            if(labDepartmentCount < dataSize){
+                string id, name;
+                gotoxy(x, y); cout << "\033[4mADD New Lab Department\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Lab Department Name : ";
+                gotoxy(x + 40, y+3);
+                cin.ignore();
+                getline(cin, name);
+
+                /* id calculation */
+                if(labDepartmentCount == 0)
+                    id = "LB001";
+                else{
+                    id = labDepartemtID[labDepartmentCount-1];
+                    int idx = id.length() - 1;
+                    while(idx >= 1)
+                    {
+                        if(id[idx] < '9')
+                        {
+                            id[idx] += 1;
+                            break;
+                        }
+                        else{
+                            id[idx] = '0';
+                            idx--;
+                        }
+                    }
+                }
+                
+                labDepartemtID[labDepartmentCount] = id;
+                labDepartmentName[labDepartmentCount] = name;
+                labDepartmentDate[labDepartmentCount] = "2024-11-15";
+                labDepartmentCount++;
+            }
+            else{
+                gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
+            }
+
+        }
+    }
+    return true;
+}
+bool labTestPage(int x, int y, string title, string menu[], int option, int size)
+{
+    if(mainScreen(0, 0))
+    {
+        if(_ACTIVE_ACTION == "VIEW")
+        {
+            gotoxy(x, y); cout<<"[ ] ADD New Lab Test";
+            gotoxy(x + 30, y); cout<<"[ ] EDIT Lab Test";
+            gotoxy(x + 60, y); cout<<"[ ] DELETE Lab Test";
+            y++;
+            
+            int j = 1;
+
+            if(labTestCount == 0)
+            {
+                gotoxy(x, y + j);     cout<<"-------------------------------------------------------------------------------------------";
+                gotoxy(x, y + j + 1); cout<<"|                                  NO DATA ENTERED YET                                    |";
+                gotoxy(x, y + j + 2); cout<<"-------------------------------------------------------------------------------------------";
+            }
+            else
+            {
+                for(int i = 0; i < labTestCount ; i++){
+                    
+                    gotoxy(x, y + j); cout << "-------------------------------------------------------------------------------------------"; j++;
+                    gotoxy(x, y + j); cout << "| Sr. " << i + 1; gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "|                                                                                         |"; j++;
+                    gotoxy(x, y + j); cout << "| ID : " << labTestID[i]; gotoxy(x+20, y + j); cout << "NAME : " << labTestName[i]; gotoxy(x+65, y + j);  cout << "RATE : " << labTestRate[i]; gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "| GROUP : " << labTestGroup[i];gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "| SPECIMEN : " << labTestSpecimen[i];gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "| UNITS : " << labTestUnit[i]; gotoxy(x+40, y + j); cout << "MACHINE: " << labTestMachine[i];gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "| Test Perform Frequency : "<< labTestFreq[i]; gotoxy(x+50, y + j); cout << "Delivery Time : " << labTestTime[i];gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "| COMMENTS : " << labTestComments[i]; gotoxy(x+90, y + j); cout << "|"; j++;
+                    gotoxy(x, y + j); cout << "-------------------------------------------------------------------------------------------"; j++;
+                }
+            }
+        }
+        else if(_ACTIVE_ACTION == "ADD")
+        {
+            sideBars(title, menu, option, size);
+            
+            if(labTestCount < dataSize){
+                string id, name, group, specimen, units, machine, frequency, deliveryTime, comments;
+                gotoxy(x, y); cout << "\033[4mADD New Lab Test\033[0m";
+                gotoxy(x, y+3); cout << "Enter Lab Test Name : ";
+                gotoxy(x + 40, y+3);
+                cin.ignore();
+                getline(cin, name);
+            }
+            else{
+                gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
+            }
+        }
     }
     return true;
 }
@@ -798,11 +1153,11 @@ int isLogin(string username, string password)
     }
     return -1;
 }
-bool sessionStart(int userID, string fname, string username, string role)
+bool sessionStart(string userID, string fname, string username, string role)
 {
     if (!isSessionStated)
     {
-        _SESSION[0] = to_string(userID);
+        _SESSION[0] = userID;
         _SESSION[1] = fname;
         _SESSION[2] = username;
         _SESSION[3] = role;
