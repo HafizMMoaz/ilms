@@ -3,39 +3,39 @@
 #include <conio.h>
 using namespace std;
 
-void gotoxy(int, int);                //~ controlling cursor position on console screen
-void screenSetup(int, int, int, int); //~ handeling console screen
-void setColor(int);                   //~ handling coloured ui on console screen
+void gotoxy(int, int);                      //~ controlling cursor position on console screen
+void screenSetup(int, int, int, int);       //~ handeling console screen
+void setColor(int);                         //~ handling coloured ui on console screen
 
 /* screens */
-bool loginScreen(int, int);           //~ x-coord, y-coord
-bool splashScreen(int, int);          //~ x-coord, y-coord
-bool mainScreen(int, int);            //~ x-coord, y-coord
+bool loginScreen(int, int);                 //~ x-coord, y-coord
+bool splashScreen(int, int);                //~ x-coord, y-coord
+bool mainScreen(int, int);                  //~ x-coord, y-coord
 
 //! pages
-bool dashboardPage(int, int);         //~ x-coord, y-coord
-bool specimenPage(int, int, string, string[], int, int);      //~ x-coord, y-coord
-bool labDepartmentPage(int, int, string, string[], int, int); //~ x-coord, y-coord
-bool labTestPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
-bool packagesPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
-bool rateListPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
-bool machinesPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
-bool sopsPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
+bool dashboardPage(int, int);                                   //~ x-coord, y-coord
+bool specimenPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool labDepartmentPage(int, int, string, string[], int, int);   //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool labTestPage(int, int, string, string[], int, int);         //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool packagesPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool rateListPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool machinesPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool sopsPage(int, int, string, string[], int, int);            //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
 
 /* structural functionalities */
 bool title(int, int);
-bool yesNoPopup(int, int);                       //~ x-chord , y-chord
-void removePopup(int, int);                      //~ x-chord, y-chord
-void menu(string[], string, int, int, int, int); //~ menu choices array , menu heading , no. of choices, choice, x-coord, y-coord
+bool yesNoPopup(int, int);                                      //~ x-chord , y-chord
+void removePopup(int, int);                                     //~ x-chord, y-chord
+void menu(string[], string, int, int, int, int);                //~ menu choices array , menu heading , no. of choices, choice, x-coord, y-coord
 int isLogin(string, string);
 bool clear(int, int, int, int);
-bool viewData(string, int, int);              //~ page Name , x-coord, y-coord
-void sideBars(string, string[], int, int);    //~ page Name , menu name
-void contentMenu(string, string[], int, int); //~ page Name , menu name
+bool viewData(string, int, int);                                //~ page Name , x-coord, y-coord
+void sideBars(string, string[], int, int);                      //~ page Name , menu name
+void contentMenu(string, string[], int, int);                   //~ page Name , menu name
 
 /* session */
 bool isSessionStated = false;
-bool sessionStart(string, string, string, string); //~ userID, Fullname , username , role
+bool sessionStart(string, string, string, string);              //~ userID, Fullname , username , role
 bool sessionEnd();
 string session(string);
 string _SESSION[4];
@@ -46,15 +46,15 @@ const int dataSize = 3;
 
 /* users data */
 string userID[dataSize]= {"U000", "U001", "U002"}, userFname[dataSize] = {"Hafiz", "Muhammad", "Moaz"}, userName[dataSize] = {"hafiz", "muhammad", "moaz"}, userEmail[dataSize],
-       userPassword[dataSize] = {"1234", "5678", "1452"}, userPhone[dataSize], userAddress[dataSize], userRole[dataSize] = {"R000", "R007", "R009"}, userLocation[dataSize];
+userPassword[dataSize] = {"1234", "5678", "1452"}, userPhone[dataSize], userAddress[dataSize], userRole[dataSize] = {"R000", "R007", "R009"}, userLocation[dataSize];
 bool userIsActive[dataSize] = {true, true, true};
 
 /* specimen */
-string specimenID[dataSize] = {"S000", "S001", "S002"}, specimenName[dataSize] = {"3- 5cc Clotted Blood or Serum", "3cc EDTA BLOOD (CBC VIAL)", "24 Hrs urine & Serum"}, specimenDescription[dataSize] = {"Clotted Blood or Serum", "EDTA (CBC)", "24 Hrs urine & Serum"};
+string specimenID[dataSize], specimenName[dataSize], specimenDescription[dataSize];
 int specimenCount = 0;
 
 /* lab department */
-string labDepartemtID[dataSize] = {"LD000", "LD001", "LD002"}, labDepartmentName[dataSize] = {"Histopathology", "Molecular Biology (PCR)", "Routine Chemistry"}, labDepartmentDate[dataSize] = {"2024-11-15", "2024-11-16", "2024-11-17"};
+string labDepartemtID[dataSize], labDepartmentName[dataSize], labDepartmentDate[dataSize];
 int labDepartmentCount = 0;
 
 /* lab Test */
@@ -68,7 +68,7 @@ main()
     string roles_id[11] = {"R000", "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009", "R010"};
     string roles_name[11] = {"Receptionist", "Phelbotomist", "Technician", "Companies & Doctors", "Courier", "Home Sampling", "Collection Center", "Manager", "Admin", "Super Admin"};
 
-    /* menues */
+    /* menus */
     string splashMenu[2] = {"\033[4mL\033[0mOGIN", "\033[4mE\033[0mXIT"};
     string sideBar[10] = {"\033[4mD\033[0mASHBOARD", "\033[4mS\033[0mETUP", "\033[4mP\033[0mATIENT", "\033[4mC\033[0mOORPARATE", "\033[4mT\033[0mEST", "\033[4mW\033[0mORKSHEET", "\033[4mH\033[0mOME SAMPLING", "C\033[4mO\033[0mURIER", "\033[4mF\033[0mINANCE", "\033[4mR\033[0mEPORTS"};
     string setupMenu[8] = {"\033[4mS\033[0mpecimen", "\033[4mL\033[0mab Departments", "Lab \033[4mT\033[0mests", "\033[4mP\033[0mackages", "Test \033[4mR\033[0mate List", "\033[4mM\033[0machines", "S\033[4mO\033[0mPs", "\033[4mB\033[0mack"};
@@ -346,6 +346,43 @@ main()
                                 Sleep(200);
                             }
                         }
+                        else if(_ACTIVE_ACTION == "DELETE")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mD\033[0mELETE Another Specimen", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
                     }
                 }
             }
@@ -369,6 +406,43 @@ main()
                         else if(_ACTIVE_ACTION == "ADD"){
                             option = 0;
                             string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Lab Department", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
+                        else if(_ACTIVE_ACTION == "DELETE")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mD\033[0mELETE Another Lab Department", "\033[4mB\033[0mack"};
                             size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
                             menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
                             while(true){
@@ -837,8 +911,7 @@ void sideBars(string pageName, string subMenu[], int option, int size)
                     menu(subMenu, "SETUP", size, 6, 2, 3);
                 Sleep(100);
                 break;
-            }
-            
+            }        
         }
         else if (GetAsyncKeyState(VK_SPACE))
         {
@@ -1138,7 +1211,39 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
             else{
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
             }
-
+        }
+        else if(_ACTIVE_ACTION == "DELETE")
+        {
+            sideBars(title, menu, option, size);
+            if(specimenCount > 0)
+            {
+                string id, msg = "INVALID ID";
+                gotoxy(x, y); cout << "\033[4mDELETE SPECIMEN\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Specimen's ID to be DELETED : ";
+                cin >> id;
+                for(int i = 0; i < specimenCount ; i++)
+                {
+                    if(id == specimenID[i])
+                    {
+                        specimenID[i] = '\0';
+                        specimenName[i] = '\0';
+                        specimenDescription[i] = '\0';
+                        specimenCount--;
+                        msg = "DATA DELTED SUCCESSFULLY";
+                        for(int x = i; x < specimenCount; x++)
+                        {
+                            specimenID[i] = specimenID[i + 1];
+                            specimenName[i] = specimenName[i + 1];
+                            specimenDescription[i] = specimenDescription[i + 1];
+                        }
+                    }
+                }
+                gotoxy(x, y + 7); cout << msg;
+            }
+            else
+            {
+                gotoxy(x, y); cout << "THERE IS NOTHING TO DELETE.";
+            }
         }
     }
     return true;
@@ -1216,6 +1321,34 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
             }
 
+        }
+        else if(_ACTIVE_ACTION == "DELETE")
+        {
+            sideBars(title, menu, option, size);
+            if(labDepartmentCount > 0)
+            {
+                string id, msg = "INVALID ID";
+                gotoxy(x, y); cout << "\033[4mDELETE LAB DEPARTMENT\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Lab Department's ID to be DELETED : ";
+                cin >> id;
+                for(int i = 0; i < labDepartmentCount ; i++)
+                {
+                    if(id == labDepartemtID[i])
+                    {
+                        labDepartemtID[i] = '\0';
+                        labDepartmentName[i] = '\0';
+                        labDepartmentDate[i] = '\0';
+                        labDepartmentCount--;
+                        msg = "DATA DELTED SUCCESSFULLY";
+
+                    }
+                }
+                gotoxy(x, y + 7); cout << msg;
+            }
+            else
+            {
+                gotoxy(x, y); cout << "THERE IS NOTHING TO DELETE.";
+            }
         }
     }
     return true;
@@ -1583,7 +1716,6 @@ bool sopsPage(int x, int y, string title, string menu[], int option, int size)
     }
     return true;
 }
-
 bool splashScreen(int x, int y)
 {
     system("cls");
