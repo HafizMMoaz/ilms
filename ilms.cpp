@@ -513,6 +513,43 @@ main()
                                 Sleep(200);
                             }
                         }
+                        else if(_ACTIVE_ACTION == "EDIT")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mE\033[0mDIT Another Lab Department", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
                     }
                     
                 }
@@ -1264,7 +1301,7 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                 {
                     if(id == specimenID[i])
                     {
-                        string id, name, description;
+                        string name, description;
                         gotoxy(x, y+5); cout << "Change the Specimen Name from " << specimenName[i] << " to ";
                         gotoxy(x + 60, y+5);
                         cin.ignore();
@@ -1369,7 +1406,7 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
 
                 /* id calculation */
                 if(labDepartmentCount == 0)
-                    id = "LB001";
+                    id = "LD001";
                 else{
                     id = labDepartemtID[labDepartmentCount-1];
                     int idx = id.length() - 1;
@@ -1396,6 +1433,37 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
             }
 
+        }
+        else if(_ACTIVE_ACTION == "EDIT")
+        {
+            sideBars(title, menu, option, size);
+            if(labDepartmentCount > 0)
+            {
+                string id, msg = "INVALID ID";
+                gotoxy(x, y); cout << "\033[4mEDIT Lab Department\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Lab Department's ID to be EDITED : ";
+                cin >> id;
+                for(int i = 0; i < labDepartmentCount ; i++)
+                {
+                    if(id == labDepartemtID[i])
+                    {
+                        string name;
+                        gotoxy(x, y+5); cout << "Change the Lab Department Name from " << labDepartmentName[i] << " to ";
+                        gotoxy(x + 60, y+5);
+                        cin.ignore();
+                        getline(cin, name);
+                        
+                        labDepartmentName[i] = name;
+                        
+                        msg = "DATA EDITED SUCCESSFULLY";
+                    }
+                }
+                gotoxy(x, y + 9); cout << msg;
+            }
+            else
+            {
+                gotoxy(x, y); cout << "THERE IS NOTHING TO EDIT.";
+            }
         }
         else if(_ACTIVE_ACTION == "DELETE")
         {
