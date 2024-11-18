@@ -3,39 +3,39 @@
 #include <conio.h>
 using namespace std;
 
-void gotoxy(int, int);                      //~ controlling cursor position on console screen
+void gotoxy(int, int);                      //* controlling cursor position on console screen
 void screenSetup(int, int, int, int);       //~ handeling console screen
-void setColor(int);                         //~ handling coloured ui on console screen
+void setColor(int);                         //* handling coloured ui on console screen
 
-/* screens */
+//! screens
 bool loginScreen(int, int);                 //~ x-coord, y-coord
-bool splashScreen(int, int);                //~ x-coord, y-coord
+bool splashScreen(int, int);                //* x-coord, y-coord
 bool mainScreen(int, int);                  //~ x-coord, y-coord
 
 //! pages
-bool dashboardPage(int, int);                                   //~ x-coord, y-coord
+bool dashboardPage(int, int);                                   //* x-coord, y-coord
 bool specimenPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
-bool labDepartmentPage(int, int, string, string[], int, int);   //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool labDepartmentPage(int, int, string, string[], int, int);   //* x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
 bool labTestPage(int, int, string, string[], int, int);         //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
-bool packagesPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool packagesPage(int, int, string, string[], int, int);        //* x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
 bool rateListPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
-bool machinesPage(int, int, string, string[], int, int);        //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
+bool machinesPage(int, int, string, string[], int, int);        //* x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
 bool sopsPage(int, int, string, string[], int, int);            //~ x-coord, y-coord, menu heading  , menu choices array, choice , no. of choices
 
-/* structural functionalities */
+//! structural functionalities
 bool title(int, int);
-bool yesNoPopup(int, int);                                      //~ x-chord , y-chord
+bool yesNoPopup(int, int);                                      //* x-chord , y-chord
 void removePopup(int, int);                                     //~ x-chord, y-chord
-void menu(string[], string, int, int, int, int);                //~ menu choices array , menu heading , no. of choices, choice, x-coord, y-coord
+void menu(string[], string, int, int, int, int);                //* menu choices array , menu heading , no. of choices, choice, x-coord, y-coord
 int isLogin(string, string);
 bool clear(int, int, int, int);
 bool viewData(string, int, int);                                //~ page Name , x-coord, y-coord
-void sideBars(string, string[], int, int);                      //~ page Name , menu name
+void sideBars(string, string[], int, int);                      //* page Name , menu name
 void contentMenu(string, string[], int, int);                   //~ page Name , menu name
 
-/* session */
+//! session
 bool isSessionStated = false;
-bool sessionStart(string, string, string, string);              //~ userID, Fullname , username , role
+bool sessionStart(string, string, string, string);              //* userID, Fullname , username , role
 bool sessionEnd();
 string session(string);
 string _SESSION[4];
