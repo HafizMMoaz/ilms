@@ -8,12 +8,12 @@ void screenSetup(int, int, int, int); //~ handeling console screen
 void setColor(int);                   //~ handling coloured ui on console screen
 
 /* screens */
-bool loginScreen(int, int);       //~ x-coord, y-coord
-bool splashScreen(int, int);      //~ x-coord, y-coord
-bool mainScreen(int, int);        //~ x-coord, y-coord
+bool loginScreen(int, int);           //~ x-coord, y-coord
+bool splashScreen(int, int);          //~ x-coord, y-coord
+bool mainScreen(int, int);            //~ x-coord, y-coord
 
 //! pages
-bool dashboardPage(int, int);     //~ x-coord, y-coord
+bool dashboardPage(int, int);         //~ x-coord, y-coord
 bool specimenPage(int, int, string, string[], int, int);      //~ x-coord, y-coord
 bool labDepartmentPage(int, int, string, string[], int, int); //~ x-coord, y-coord
 bool labTestPage(int, int, string, string[], int, int);       //~ x-coord, y-coord
