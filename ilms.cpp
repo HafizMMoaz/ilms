@@ -611,7 +611,8 @@ main()
                             size = sizeof(innerContent) / sizeof(innerContent[0]);
                             contentMenu("Rate List", innerContent, option, size);
                         }
-                        else if(_ACTIVE_ACTION == "ADD"){
+                        else if(_ACTIVE_ACTION == "ADD")
+                        {
                             option = 0;
                             string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Rate List", "\033[4mB\033[0mack"};
                             size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
@@ -668,7 +669,8 @@ main()
                             size = sizeof(innerContent) / sizeof(innerContent[0]);
                             contentMenu("Machine", innerContent, option, size);
                         }
-                        else if(_ACTIVE_ACTION == "ADD"){
+                        else if(_ACTIVE_ACTION == "ADD")
+                        {
                             option = 0;
                             string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Machine", "\033[4mB\033[0mack"};
                             size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
