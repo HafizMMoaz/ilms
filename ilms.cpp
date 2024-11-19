@@ -1,8 +1,10 @@
 #include <iostream>
 #include <windows.h>
 #include <conio.h>
+#include <ctime>
 using namespace std;
 
+string dateTime(string);                    //~ date or time or both
 void gotoxy(int, int);                      //* controlling cursor position on console screen
 void screenSetup(int, int, int, int);       //~ handeling console screen
 void setColor(int);                         //* handling coloured ui on console screen
@@ -41,7 +43,7 @@ string session(string);
 string _SESSION[4];
 
 //& control variables
-string _ACTIVE_SCREEN = "SPLASH", _ACTIVE_PAGE = "DASHBOARD", _ACTIVE_CONTROL = "SIDEBAR", _ACTIVE_ACTION = "VIEW";
+string _ACTIVE_SCREEN = "SPLASH", _ACTIVE_PAGE = "DASHBOARD", _ACTIVE_CONTROL = "SIDEBAR", _ACTIVE_ACTION = "VIEW", _LOGIN_TIME = "";
 
 //& datasize that can be stored
 const int dataSize = 3;
@@ -63,6 +65,10 @@ int labDepartmentCount = 0;
 string labTestID[dataSize], labTestName[dataSize], labTestRate[dataSize], labTestGroup[dataSize], labTestMachine[dataSize], labTestUnit[dataSize], labTestFreq[dataSize], labTestTime[dataSize], labTestComments[dataSize], labTestSpecimen[dataSize];
 int labTestCount = 0;
 
+//^ Machines
+string machineID[dataSize], machineName[dataSize], machineDescription[dataSize], machineQuantity[dataSize];
+int machineCount = 0;
+
 main()
 {
     screenSetup(105, 40, 120, 40);
@@ -72,7 +78,7 @@ main()
 
     //& menus
     string splashMenu[2] = {"\033[4mL\033[0mOGIN", "\033[4mE\033[0mXIT"};
-    string sideBar[10] = {"\033[4mD\033[0mASHBOARD", "\033[4mS\033[0mETUP", "\033[4mP\033[0mATIENT", "\033[4mC\033[0mOORPARATE", "\033[4mT\033[0mEST", "\033[4mW\033[0mORKSHEET", "\033[4mH\033[0mOME SAMPLING", "C\033[4mO\033[0mURIER", "\033[4mF\033[0mINANCE", "\033[4mR\033[0mEPORTS"};
+    string sideBar[11] = {"\033[4mD\033[0mASHBOARD", "\033[4mS\033[0mETUP", "\033[4mP\033[0mATIENT", "\033[4mC\033[0mOORPARATE", "\033[4mT\033[0mEST", "\033[4mW\033[0mORKSHEET", "\033[4mH\033[0mOME SAMPLING", "C\033[4mO\033[0mURIER", "\033[4mF\033[0mINANCE", "\033[4mR\033[0mEPORTS", "\033[4mL\033[0mOGOUT"};
     string setupMenu[8] = {"\033[4mS\033[0mpecimen", "\033[4mL\033[0mab Departments", "Lab \033[4mT\033[0mests", "\033[4mP\033[0mackages", "Test \033[4mR\033[0mate List", "\033[4mM\033[0machines", "S\033[4mO\033[0mPs", "\033[4mB\033[0mack"};
     string innerContent[3] = {"\033[4mA\033[0mDD New", "\033[4mE\033[0mDIT", "\033[4mD\033[0mELETE"};
 
@@ -84,6 +90,7 @@ main()
         {
             if (splashScreen(0, 0))
             {
+                option = 0;
                 size = sizeof(splashMenu) / sizeof(splashMenu[0]);
                 menu(splashMenu, "Splash", size, option, 55, 26);
                 while (true)
@@ -157,6 +164,8 @@ main()
                     if (sessionStart(userId, fullname, username, role))
                     {
                         _ACTIVE_SCREEN = "MAIN";
+                        _ACTIVE_PAGE = "DASHBOARD";
+                        _LOGIN_TIME = dateTime("date") + " " + dateTime("time");
                         continue;
                     }
                 }
@@ -227,6 +236,10 @@ main()
                             {
                                 option = 9;
                             }
+                            else if (GetAsyncKeyState('L') && GetAsyncKeyState(VK_MENU))
+                            {
+                                option = 10;
+                            }
                             else if (GetAsyncKeyState(VK_SPACE))
                             {
                                 if (option == 0)
@@ -286,6 +299,12 @@ main()
                                 else if (option == 9)
                                 {
                                     _ACTIVE_PAGE = "REPORTS";
+                                    Sleep(100);
+                                    break;
+                                }
+                                else if (option == 10)
+                                {
+                                    _ACTIVE_PAGE = "LOGOUT";
                                     Sleep(100);
                                     break;
                                 }
@@ -782,6 +801,80 @@ main()
                                 Sleep(200);
                             }
                         }
+                        else if(_ACTIVE_ACTION == "EDIT")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mE\033[0mDIT Another Machine", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
+                        else if(_ACTIVE_ACTION == "DELETE")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mD\033[0mELETE Another Machine", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
                     }
                     
                 }
@@ -843,6 +936,18 @@ main()
                     
                 }
             }
+            else if (_ACTIVE_PAGE == "LOGOUT")
+            {
+                system("cls");
+                if(sessionEnd())
+                {
+                    gotoxy(3,3); cout << "Logging out ...";
+                    Sleep(300);
+                    gotoxy(3,5); cout << "We will MISS you " << session("fname");
+                    _ACTIVE_SCREEN = "SPLASH";
+                    Sleep(2000);
+                }
+            }
             else
             {
                 system("cls");
@@ -885,7 +990,10 @@ void menu(string menu[], string heading, int size, int option, int x, int y)
     {
         for (int i = 0; i < size; i++)
         {
-            y += 2;
+            if(i == size - 1)
+                y = 37;
+            else
+                y += 2;
             gotoxy(x, y);
             cout << " [" << op[i] << "] " << menu[i];
         }
@@ -912,6 +1020,15 @@ void menu(string menu[], string heading, int size, int option, int x, int y)
         }
     }
     else if (heading == "innerMenuADD")
+    {
+        for (int i = 0; i < size; i++)
+        {
+            gotoxy(x, y);
+            cout << "[" << op[i] << "] " << menu[i];
+            y += 2;
+        }
+    }
+    else if (heading == "selection")
     {
         for (int i = 0; i < size; i++)
         {
@@ -1101,7 +1218,7 @@ bool mainScreen(int x, int y)
 {
     system("cls");
     gotoxy(x, y); cout<<"------------------------------------------------------------------------------------------------------------------------";
-    gotoxy(x, y + 1); cout<<"|          ILMS          |                                                                                             |";
+    gotoxy(x, y + 1); cout<<"|          ILMS          |";      gotoxy(x+85, y+1); cout << "LOGIN Time : " << _LOGIN_TIME; gotoxy(x + 119, y + 1);cout << "|";
     gotoxy(x, y + 2); cout<<"------------------------------------------------------------------------------------------------------------------------";
     gotoxy(x, y + 3); cout<<"|                        |                                                                                             |";
     gotoxy(x, y + 4); cout<<"|                        |                                                                                             |";
@@ -1145,8 +1262,10 @@ bool mainScreen(int x, int y)
 }
 bool dashboardPage(int x, int y)
 {
+    
     if (mainScreen(0, 0))
     {
+        
         gotoxy(x - 4, y); cout<<"WELCOME! \1 " << session("fname");
         gotoxy(x - 4, y + 1); cout<<"------------------------------------------------";
 
@@ -1315,6 +1434,7 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                         specimenDescription[i] = description;
                         
                         msg = "DATA EDITED SUCCESSFULLY";
+break;
                     }
                 }
                 gotoxy(x, y + 9); cout << msg;
@@ -1428,7 +1548,7 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                 
                 labDepartemtID[labDepartmentCount] = id;
                 labDepartmentName[labDepartmentCount] = name;
-                labDepartmentDate[labDepartmentCount] = "2024-11-16";
+                labDepartmentDate[labDepartmentCount] = dateTime("date");
                 labDepartmentCount++;
             }
             else{
@@ -1458,6 +1578,7 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                         labDepartmentName[i] = name;
                         
                         msg = "DATA EDITED SUCCESSFULLY";
+break;
                     }
                 }
                 gotoxy(x, y + 9); cout << msg;
@@ -1504,7 +1625,7 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
     }
     return true;
 }
-bool labTestPage(int x, int y, string title, string menu[], int option, int size)
+bool labTestPage(int x, int y, string title, string menus[], int option, int size)
 {
     if(mainScreen(0, 0))
     {
@@ -1542,19 +1663,314 @@ bool labTestPage(int x, int y, string title, string menu[], int option, int size
         }
         else if(_ACTIVE_ACTION == "ADD")
         {
-            sideBars(title, menu, option, size);
+            sideBars(title, menus, option, size);
             
             if(labTestCount < dataSize){
+                
                 string id, name, group, rate, specimen, units, machine, frequency, deliveryTime, comments;
                 gotoxy(x, y); cout << "\033[4mADD New Lab Test\033[0m";
+
                 gotoxy(x, y+3); cout << "Enter Lab Test Name : ";
-                gotoxy(x + 40, y+3);
-                cin.ignore();
-                getline(cin, name);
-                
+                gotoxy(x + 40, y+3);cin.ignore();getline(cin, name);
+
+                gotoxy(x, y+5); cout << "Enter Lab Test Rate : ";
+                gotoxy(x + 40, y+5); cin.ignore(); getline(cin, rate);
+
+                gotoxy(x, y+7); cout << "Enter Lab Test Result Unit : ";
+                gotoxy(x + 40, y+7); cin.ignore(); getline(cin, units);
+
+                gotoxy(x, y+9); cout << "Enter Lab Test Result Frequency : ";
+                gotoxy(x, y+10); cout << "(daily, weekly, monthly, etc.)";
+                gotoxy(x + 40, y+9); cin.ignore(); getline(cin, frequency);
+
+                gotoxy(x, y+12); cout << "Enter Lab Test Delivery Time : ";
+                gotoxy(x, y+13); cout << "(xHrs, xDays, etc)";
+                gotoxy(x + 40, y+12); cin.ignore(); getline(cin, deliveryTime);
+
+                gotoxy(x, y+15); cout << "Enter Lab Test Comments : ";
+                gotoxy(x + 40, y+15); cin.ignore(); getline(cin, comments);
+
+                if(clear(x, y+3, 117, 37))
+                {
+                    gotoxy(x, y+3); cout << "Select the Required Specimen for Lab Test: ";
+                    int op = 0;
+                    int size = specimenCount;
+                    if(size > 0)
+                    {
+                        while(true)
+                        {
+                            menu(specimenName, "selection", size, op, x + 7, y+5);
+                            if (GetAsyncKeyState(VK_DOWN))
+                            {
+                                if (op < size - 1)
+                                {
+                                    op++;
+                                }
+                            }
+                            else if (GetAsyncKeyState(VK_UP))
+                            {
+                                if (op > 0)
+                                {
+                                    op--;
+                                }
+                            }
+                            else if(GetAsyncKeyState(VK_SPACE))
+                            {
+                                specimen = specimenName[op];
+                                Sleep(200);
+                                break;
+                            }
+                            menu(specimenName, "selection", size, op, x + 7, y+5);
+                            Sleep(200);
+                        }
+                    }
+                    else
+                    {
+                        gotoxy(x, y + 5); cout << "You have not ADDED any SPEDCIMEN YET!";
+                    }
+
+                }
+                if(clear(x, y+3, 117, 37))
+                {
+                    gotoxy(x, y+3); cout << "Select the Lab Department / Group for Lab Test: ";
+                    int op = 0;
+                    int size = labDepartmentCount;
+                    if(size > 0)
+                    {
+                        while(true)
+                        {
+                            menu(labDepartmentName, "selection", size, op, x + 7, y+5);
+                            if (GetAsyncKeyState(VK_DOWN))
+                            {
+                                if (op < size - 1)
+                                {
+                                    op++;
+                                }
+                            }
+                            else if (GetAsyncKeyState(VK_UP))
+                            {
+                                if (op > 0)
+                                {
+                                    op--;
+                                }
+                            }
+                            else if(GetAsyncKeyState(VK_SPACE))
+                            {
+                                group = labDepartmentName[op];
+                                Sleep(200);
+                                break;
+                            }
+                            menu(labDepartmentName, "selection", size, op, x + 7, y+5);
+                            Sleep(200);
+                        }
+                    }
+                    else
+                    {
+                        gotoxy(x, y + 5); cout << "You have not ADDED any Lab Department YET!";
+                    }
+
+                }
+                if(clear(x, y+3, 117, 37))
+                {
+                    gotoxy(x, y+3); cout << "Select the Machine for Lab Test: ";
+                    int op = 0;
+                    int size = machineCount;
+                    if(size > 0)
+                    {
+                        while(true)
+                        {
+                            menu(machineName, "selection", size, op, x + 7, y+5);
+                            if (GetAsyncKeyState(VK_DOWN))
+                            {
+                                if (op < size - 1)
+                                {
+                                    op++;
+                                }
+                            }
+                            else if (GetAsyncKeyState(VK_UP))
+                            {
+                                if (op > 0)
+                                {
+                                    op--;
+                                }
+                            }
+                            else if(GetAsyncKeyState(VK_SPACE))
+                            {
+                                machine = machineName[op];
+                                Sleep(200);
+                                break;
+                            }
+                            menu(machineName, "selection", size, op, x + 7, y+5);
+                            Sleep(200);
+                        }
+                    }
+                    else
+                    {
+                        gotoxy(x, y + 5); cout << "You have not ADDED any Machine YET!";
+                    }
+
+                }
+
             }
             else{
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
+            }
+        }
+    }
+    return true;
+}
+bool machinesPage(int x, int y, string title, string menu[], int option, int size)
+{
+    if (mainScreen(0, 0))
+    {
+        if(_ACTIVE_ACTION == "VIEW")
+        {
+            gotoxy(x, y); cout<<"[ ] ADD New Machine";
+            gotoxy(x + 30, y); cout<<"[ ] EDIT Machine";
+            gotoxy(x + 60, y); cout<<"[ ] DELETE Machine";
+            y++;
+            gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |               \033[4mNAME\033[0m              |          \033[4mDESCRIPTION\033[0m           | \033[4mQUANTITY\033[0m |";
+            gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
+            int j = 4;
+            if(machineCount == 0)
+            {
+                gotoxy(x, y + j);     cout<<"|                                  NO DATA ENTERED YET                                    |";
+                gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
+            }
+            else
+            {
+                for(int i = 0; i < machineCount ; i++){
+                    gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
+                    gotoxy(x + 7 , y + j); cout << machineID[i]; gotoxy(x + 12, y + j); cout << "|";
+                    gotoxy(x + 14 , y + j); cout << machineName[i]; gotoxy(x + 46, y + j); cout << "|";
+                    gotoxy(x + 48 , y + j); cout << machineDescription[i]; gotoxy(x + 79, y + j); cout << "|";
+                    gotoxy(x + 81 , y + j); cout << machineQuantity[i]; gotoxy(x + 90, y + j); cout << "|";
+                    gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
+                    j+=2;
+                }
+            }
+        }
+        else if(_ACTIVE_ACTION == "ADD")
+        {
+            sideBars(title, menu, option, size);
+            
+            if(machineCount < dataSize){
+                string id, name, description, quantity;
+                gotoxy(x, y); cout << "\033[4mADD New Machine\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Machine Name : ";
+                gotoxy(x + 40, y+3);
+                cin.ignore();
+                getline(cin, name);
+                gotoxy(x, y+5); cout << "Enter the Machine Description : ";
+                gotoxy(x + 40, y+5); getline(cin, description);
+                gotoxy(x, y+7); cout << "Enter the Machine Quantity : ";
+                gotoxy(x + 40, y+7); getline(cin, quantity);
+
+                /* id calculation */
+                if(machineCount == 0)
+                    id = "M001";
+                else{
+                    id = machineID[machineCount-1];
+                    int idx = id.length() - 1;
+                    while(idx >= 1)
+                    {
+                        if(id[idx] < '9')
+                        {
+                            id[idx] += 1;
+                            break;
+                        }
+                        else{
+                            id[idx] = '0';
+                            idx--;
+                        }
+                    }
+                }
+                
+                machineID[machineCount] = id;
+                machineName[machineCount] = name;
+                machineDescription[machineCount] = description;
+                machineQuantity[machineCount] = quantity;
+                machineCount++;
+            }
+            else{
+                gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
+            }
+
+        }
+        else if(_ACTIVE_ACTION == "EDIT")
+        {
+            sideBars(title, menu, option, size);
+            if(machineCount > 0)
+            {
+                string id, msg = "INVALID ID";
+                gotoxy(x, y); cout << "\033[4mEDIT MACHINES\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Machine's ID to be EDITED : ";
+                cin >> id;
+                for(int i = 0; i < machineCount ; i++)
+                {
+                    if(id == machineID[i])
+                    {
+                        string name, description, quantity;
+                        gotoxy(x, y+5); cout << "Change the Machine Name from " << machineName[i] << " to ";
+                        gotoxy(x + 60, y+5);
+                        cin.ignore();
+                        getline(cin, name);
+                        gotoxy(x, y+7); cout << "Change the Machine Description from " << machineDescription[i] << " to ";
+                        gotoxy(x + 60, y+7); getline(cin, description);
+                        gotoxy(x, y+9); cout << "Change the Machine Quantity from " << machineQuantity[i] << " to ";
+                        gotoxy(x + 60, y+9); getline(cin, quantity);
+                        
+                        machineName[i] = name;
+                        machineDescription[i] = description;
+                        machineQuantity[i] = quantity;
+                        
+                        msg = "DATA EDITED SUCCESSFULLY";
+                        break;
+                    }
+                }
+                gotoxy(x, y + 9); cout << msg;
+            }
+            else
+            {
+                gotoxy(x, y); cout << "THERE IS NOTHING TO EDIT.";
+            }
+        }
+        else if(_ACTIVE_ACTION == "DELETE")
+        {
+            sideBars(title, menu, option, size);
+            if(machineCount > 0)
+            {
+                string id, msg = "INVALID ID";
+                gotoxy(x, y); cout << "\033[4mDELETE MACHINES\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Machine's ID to be DELETED : ";
+                cin >> id;
+                for(int i = 0; i < machineCount ; i++)
+                {
+                    if(id == machineID[i])
+                    {
+                        machineID[i] = '\0';
+                        machineName[i] = '\0';
+                        machineDescription[i] = '\0';
+                        machineQuantity[i] = '\0';
+                        machineCount--;
+                        msg = "DATA DELTED SUCCESSFULLY";
+                        for(int x = i; x < machineCount; x++)
+                        {
+                            machineID[x] = machineID[x + 1];
+                            machineName[x] = machineName[x + 1];
+                            machineDescription[x] = machineDescription[x + 1];
+                            machineQuantity[x] = machineQuantity[x + 1];
+                        }
+                        msg = "DATA EDITED SUCCESSFULLY";
+                        break;
+                    }
+                }
+                gotoxy(x, y + 7); cout << msg;
+            }
+            else
+            {
+                gotoxy(x, y); cout << "THERE IS NOTHING TO DELETE.";
             }
         }
     }
@@ -1677,83 +2093,6 @@ bool rateListPage(int x, int y, string title, string menu[], int option, int siz
                 string id, name;
                 gotoxy(x, y); cout << "\033[4mADD New Rate List\033[0m";
                 gotoxy(x, y+3); cout << "Enter the Rate List Name : ";
-                gotoxy(x + 40, y+3);
-                cin.ignore();
-                getline(cin, name);
-
-                /* id calculation */
-                if(labDepartmentCount == 0)
-                    id = "LB001";
-                else{
-                    id = labDepartemtID[labDepartmentCount-1];
-                    int idx = id.length() - 1;
-                    while(idx >= 1)
-                    {
-                        if(id[idx] < '9')
-                        {
-                            id[idx] += 1;
-                            break;
-                        }
-                        else{
-                            id[idx] = '0';
-                            idx--;
-                        }
-                    }
-                }
-                
-                labDepartemtID[labDepartmentCount] = id;
-                labDepartmentName[labDepartmentCount] = name;
-                labDepartmentDate[labDepartmentCount] = "2024-11-15";
-                labDepartmentCount++;
-            }
-            else{
-                gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
-            }
-
-        }
-    }
-    return true;
-}
-bool machinesPage(int x, int y, string title, string menu[], int option, int size)
-{
-    if (mainScreen(0, 0))
-    {
-        if(_ACTIVE_ACTION == "VIEW")
-        {
-            gotoxy(x, y); cout<<"[ ] ADD New Machine";
-            gotoxy(x + 30, y); cout<<"[ ] EDIT Machine";
-            gotoxy(x + 60, y); cout<<"[ ] DELETE Machine";
-            y++;
-            gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m   |                   \033[4mNAME\033[0m                    |              \033[4mDATE\033[0m              |";
-            gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
-            
-            int j = 4;
-            if(labDepartmentCount == 0)
-            {
-                gotoxy(x, y + j);     cout<<"|                                  NO DATA ENTERED YET                                    |";
-                gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
-            }
-            else
-            {
-                for(int i = 0; i < labDepartmentCount ; i++){
-                    gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
-                    gotoxy(x + 7 , y + j); cout << labDepartemtID[i]; gotoxy(x + 13, y + j); cout << "|";
-                    gotoxy(x + 15 , y + j); cout << labDepartmentName[i]; gotoxy(x + 57, y + j); cout << "|";
-                    gotoxy(x + 59 , y + j); cout << labDepartmentDate[i]; gotoxy(x + 90, y + j); cout << "|";
-                    gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
-                    j+=2;
-                }
-            }
-        }
-        else if(_ACTIVE_ACTION == "ADD")
-        {
-            sideBars(title, menu, option, size);
-            
-            if(labDepartmentCount < dataSize){
-                string id, name;
-                gotoxy(x, y); cout << "\033[4mADD New Machine\033[0m";
-                gotoxy(x, y+3); cout << "Enter the Machine Name : ";
                 gotoxy(x + 40, y+3);
                 cin.ignore();
                 getline(cin, name);
@@ -2015,7 +2354,7 @@ bool sessionEnd()
     if (isSessionStated)
     {
         for (int i = 0; i < 4; i++)
-            _SESSION[i] = "";
+            _SESSION[i] = '\0';
         isSessionStated = false;
         return true;
     }
@@ -2084,6 +2423,22 @@ bool clear(int startX, int startY, int endX, int endY)
     }
 
     return true;
+}
+string dateTime(string requirement)
+{
+    // Get the current time in seconds since the Unix epoch
+    time_t now = time(0);
+
+    // Convert the time_t to a string representation in the format YYYY-MM-DD
+    char date[11];  // Buffer to hold the formatted date
+    char time[11];  // Buffer to hold the formatted time
+    strftime(time, sizeof(time), "%H:%M:%S", localtime(&now));
+    strftime(date, sizeof(date), "%Y-%m-%d", localtime(&now));
+
+    if(requirement == "date")
+        return date;
+    else if(requirement == "time")
+        return time;
 }
 void gotoxy(int x, int y)
 {
