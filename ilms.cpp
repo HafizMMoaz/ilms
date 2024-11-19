@@ -1485,7 +1485,7 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                         labDepartmentDate[i] = '\0';
                         labDepartmentCount--;
                         msg = "DATA DELTED SUCCESSFULLY";
-                        for(int x = i; x < specimenCount; x++)
+                        for(int x = i; x < labDepartmentCount; x++)
                         {
                             labDepartemtID[i] = labDepartemtID[i + 1];
                             labDepartmentName[i] = labDepartmentName[i + 1];
