@@ -4,6 +4,7 @@
 #include <ctime>
 using namespace std;
 
+//! global functions
 string dateTime(string);                    //~ date or time or both
 void gotoxy(int, int);                      //* controlling cursor position on console screen
 void screenSetup(int, int, int, int);       //~ handeling console screen
