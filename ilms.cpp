@@ -1344,9 +1344,9 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                         msg = "DATA DELTED SUCCESSFULLY";
                         for(int x = i; x < specimenCount; x++)
                         {
-                            specimenID[i] = specimenID[i + 1];
-                            specimenName[i] = specimenName[i + 1];
-                            specimenDescription[i] = specimenDescription[i + 1];
+                            specimenID[x] = specimenID[x + 1];
+                            specimenName[x] = specimenName[x + 1];
+                            specimenDescription[x] = specimenDescription[x + 1];
                         }
 
                         break;
@@ -1487,9 +1487,9 @@ bool labDepartmentPage(int x, int y, string title, string menu[], int option, in
                         msg = "DATA DELTED SUCCESSFULLY";
                         for(int x = i; x < labDepartmentCount; x++)
                         {
-                            labDepartemtID[i] = labDepartemtID[i + 1];
-                            labDepartmentName[i] = labDepartmentName[i + 1];
-                            labDepartmentDate[i] = labDepartmentDate[i + 1];
+                            labDepartemtID[x] = labDepartemtID[x + 1];
+                            labDepartmentName[x] = labDepartmentName[x + 1];
+                            labDepartmentDate[x] = labDepartmentDate[x + 1];
                         }
 
                     }
