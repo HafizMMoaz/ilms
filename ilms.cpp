@@ -1545,12 +1545,13 @@ bool labTestPage(int x, int y, string title, string menu[], int option, int size
             sideBars(title, menu, option, size);
             
             if(labTestCount < dataSize){
-                string id, name, group, specimen, units, machine, frequency, deliveryTime, comments;
+                string id, name, group, rate, specimen, units, machine, frequency, deliveryTime, comments;
                 gotoxy(x, y); cout << "\033[4mADD New Lab Test\033[0m";
                 gotoxy(x, y+3); cout << "Enter Lab Test Name : ";
                 gotoxy(x + 40, y+3);
                 cin.ignore();
                 getline(cin, name);
+                
             }
             else{
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
