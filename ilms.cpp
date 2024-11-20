@@ -2,9 +2,18 @@
 #include <windows.h>
 #include <conio.h>
 #include <ctime>
+#include <ios>
+#include <limits>
 using namespace std;
 
 //! global functions
+void clearInputBuffer() {
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    while (_kbhit()) {
+        _getch();
+    }
+}
+
 string dateTime(string);                    //~ date or time or both
 void gotoxy(int, int);                      //* controlling cursor position on console screen
 void screenSetup(int, int, int, int);       //~ handeling console screen
@@ -1479,7 +1488,7 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                 gotoxy(x, y); cout << "\033[4mADD NEW SPECIMEN\033[0m";
                 gotoxy(x, y+3); cout << "Enter the Specimen Name : ";
                 gotoxy(x + 40, y+3);
-                cin.ignore();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
                 getline(cin, name);
                 gotoxy(x, y+5); cout << "Enter the Specimen Description : ";
                 gotoxy(x + 40, y+5); getline(cin, description);
@@ -1529,7 +1538,7 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                         string name, description;
                         gotoxy(x, y+5); cout << "Change the Specimen Name from " << specimenName[i] << " to ";
                         gotoxy(x + 60, y+5);
-                        cin.ignore();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
                         getline(cin, name);
                         gotoxy(x, y+7); cout << "Change the Specimen Description from " << specimenDescription[i] << " to ";
                         gotoxy(x + 60, y+7); getline(cin, description);
@@ -1556,6 +1565,7 @@ break;
                 string id, msg = "INVALID ID";
                 gotoxy(x, y); cout << "\033[4mDELETE SPECIMEN\033[0m";
                 gotoxy(x, y+3); cout << "Enter the Specimen's ID to be DELETED : ";
+
                 cin >> id;
                 for(int i = 0; i < specimenCount ; i++)
                 {
@@ -1770,7 +1780,7 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
             sideBars(title, menus, option, size);
             
             if(labTestCount < dataSize){
-                
+                bool speci = false, labD = false, mach = false;
                 string id, name, group, rate, specimen, units, machine, frequency, deliveryTime, comments;
                 gotoxy(x, y); cout << "\033[4mADD New Lab Test\033[0m";
 
@@ -1821,6 +1831,7 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
                             else if(GetAsyncKeyState(VK_SPACE))
                             {
                                 specimen = specimenName[op];
+                                speci = true;
                                 Sleep(200);
                                 break;
                             }
@@ -1834,7 +1845,7 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
                     }
 
                 }
-                if(clear(x, y+3, 117, 37))
+                if(speci && clear(x, y+3, 117, 37))
                 {
                     gotoxy(x, y+3); cout << "Select the Lab Department / Group for Lab Test: ";
                     int op = 0;
@@ -1861,6 +1872,7 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
                             else if(GetAsyncKeyState(VK_SPACE))
                             {
                                 group = labDepartmentName[op];
+                                labD = true;
                                 Sleep(200);
                                 break;
                             }
@@ -1874,7 +1886,7 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
                     }
 
                 }
-                if(clear(x, y+3, 117, 37))
+                if(labD && clear(x, y+3, 117, 37))
                 {
                     gotoxy(x, y+3); cout << "Select the Machine for Lab Test: ";
                     int op = 0;
@@ -1901,6 +1913,7 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
                             else if(GetAsyncKeyState(VK_SPACE))
                             {
                                 machine = machineName[op];
+                                mach = true;
                                 Sleep(200);
                                 break;
                             }
@@ -1934,18 +1947,24 @@ bool labTestPage(int x, int y, string title, string menus[], int option, int siz
                         }
                     }
                 }
-
-                labTestID[labTestCount] = id;
-                labTestName[labTestCount] = name;
-                labTestRate[labTestCount] = rate;
-                labTestGroup[labTestCount] = group;
-                labTestMachine[labTestCount] = machine;
-                labTestUnit[labTestCount] = units;
-                labTestFreq[labTestCount] = frequency;
-                labTestTime[labTestCount] = deliveryTime;
-                labTestComments[labTestCount] = comments;
-                labTestSpecimen[labTestCount] = specimen;
-                labTestCount++;
+                
+                if(speci && labD && mach)
+                {
+                    labTestID[labTestCount] = id;
+                    labTestName[labTestCount] = name;
+                    labTestRate[labTestCount] = rate;
+                    labTestGroup[labTestCount] = group;
+                    labTestMachine[labTestCount] = machine;
+                    labTestUnit[labTestCount] = units;
+                    labTestFreq[labTestCount] = frequency;
+                    labTestTime[labTestCount] = deliveryTime;
+                    labTestComments[labTestCount] = comments;
+                    labTestSpecimen[labTestCount] = specimen;
+                    labTestCount++;
+                }
+                else{
+                    gotoxy(x, y+19); cout << "Lab Test is not added.";
+                }
             }
             else{
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
