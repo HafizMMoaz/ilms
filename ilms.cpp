@@ -82,6 +82,9 @@ int machineCount = 0;
 //^ sops
 string sopID[dataSize], sop[dataSize], sopDate[dataSize]; int sopCount = 0;
 
+//^ packages
+string packageName[dataSize], packageTests[dataSize][10]; 
+
 main()
 {
     screenSetup(105, 40, 120, 40);
