@@ -7,13 +7,6 @@
 using namespace std;
 
 //! global functions
-void clearInputBuffer() {
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-    while (_kbhit()) {
-        _getch();
-    }
-}
-
 string dateTime(string);                    //~ date or time or both
 void gotoxy(int, int);                      //* controlling cursor position on console screen
 void screenSetup(int, int, int, int);       //~ handeling console screen
@@ -44,6 +37,7 @@ bool clear(int, int, int, int);
 bool viewData(string, int, int);                                //~ page Name , x-coord, y-coord
 void sideBars(string, string[], int, int);                      //* page Name , menu name
 void contentMenu(string, string[], int, int);                   //~ page Name , menu name
+bool isValidate(string, string);
 
 //! session
 bool isSessionStated = false;
@@ -83,7 +77,8 @@ int machineCount = 0;
 string sopID[dataSize], sop[dataSize], sopDate[dataSize]; int sopCount = 0;
 
 //^ packages
-string packageName[dataSize], packageTests[dataSize][10]; 
+string packageID[dataSize], packageName[dataSize],packageTestCount[dataSize], packageTests[dataSize][5], packageRate[dataSize], packageDisc[dataSize];
+int packageCount;
 
 main()
 {
@@ -164,12 +159,13 @@ main()
                 string username, password;
                 gotoxy(55, 24); cout << "LOGIN";
                 gotoxy(40, 27); cout << "Enter your username  :";
-                gotoxy(65, 27);
-                cin.ignore();
-                cin >> username;
-                gotoxy(40, 29);  cout << "Enter your password  :";
-                gotoxy(65, 29);
-                cin >> password;
+                gotoxy(65, 27); cin >> username;
+                while(!isValidate("username", username)){
+                    gotoxy(65, 27); cout << "                                 ";
+                    gotoxy(65, 27); cin >> username;
+                }
+                gotoxy(40, 29); cout << "Enter your password  :";
+                gotoxy(65, 29); cin >> password;
                 int userLocation = isLogin(username, password);
                 if (userLocation >= 0)
                 {
@@ -2366,24 +2362,23 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
             gotoxy(x, y); cout<<"[ ] ADD New Packages";
             gotoxy(x + 30, y); cout<<"[ ] EDIT Packages";
             gotoxy(x + 60, y); cout<<"[ ] DELETE Packages";
-            y++;
+            y++;           
             gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m   |                   \033[4mNAME\033[0m                    |              \033[4mDATE\033[0m              |";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |            \033[4mNAME\033[0m            |             \033[4mDESCRIPTION\033[0m              |";
             gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
-            
             int j = 4;
-            if(labDepartmentCount == 0)
+            if(packageCount == 0)
             {
                 gotoxy(x, y + j);     cout<<"|                                  NO DATA ENTERED YET                                    |";
                 gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
             }
             else
             {
-                for(int i = 0; i < labDepartmentCount ; i++){
+                for(int i = 0; i < packageCount ; i++){
                     gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
-                    gotoxy(x + 7 , y + j); cout << labDepartemtID[i]; gotoxy(x + 13, y + j); cout << "|";
-                    gotoxy(x + 15 , y + j); cout << labDepartmentName[i]; gotoxy(x + 57, y + j); cout << "|";
-                    gotoxy(x + 59 , y + j); cout << labDepartmentDate[i]; gotoxy(x + 90, y + j); cout << "|";
+                    gotoxy(x + 7 , y + j); cout << packageID[i]; gotoxy(x + 12, y + j); cout << "|";
+                    gotoxy(x + 14 , y + j); cout << packageName[i]; gotoxy(x + 41, y + j); cout << "|";
+                    gotoxy(x + 43 , y + j); cout << packageRate[i]; gotoxy(x + 90, y + j); cout << "|";
                     gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
                     j+=2;
                 }
@@ -2393,19 +2388,58 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
         {
             sideBars(title, menu, option, size);
             
-            if(labDepartmentCount < dataSize){
-                string id, name;
+            if(packageCount < dataSize){
+                string id, name, testCount, discount;
+                float price = 0;
                 gotoxy(x, y); cout << "\033[4mADD New Packages\033[0m";
                 gotoxy(x, y+3); cout << "Enter the Packages Name : ";
                 gotoxy(x + 40, y+3);
                 cin.ignore();
                 getline(cin, name);
+                gotoxy(x, y+5); cout << "You can add 2 - 5 tests in each package. Only Number Type Data Allowed";
+                gotoxy(x, y+7); cout << "Enter the number of tests you want to add : ";
+                gotoxy(x + 40, y+7); getline(cin, testCount);
+                while(!isValidate("packageTestCount", testCount))
+                {
+                    gotoxy(x + 40, y+7); cout << "                            ";
+                    gotoxy(x + 40, y+7); getline(cin, testCount);
+                }
+                int count = stoi(testCount), j = y + 9;
+                string tests[count];
+                for(int i = 0; i < count ; i++)
+                {
+                    gotoxy(x, j); cout << "Enter the valid LabTest ID for the test " << i+1 <<" : ";
+                    gotoxy(x+40, j); cin >> tests[i];
+                    while(!isValidate("labTestIDExists", tests[i]))
+                    {
+                        gotoxy(x + 40, j); cout << "                            ";
+                        gotoxy(x + 40, j); cin >> tests[i];
+                    }
+                    for(int i = 0; i < labTestCount; i++)
+                    {
+                        if(labTestID[i] == tests[i])
+                        {
+                            price += stof(labTestRate[i]);
+                            break;
+                        }
+                    }
+                    j++;
+                }
 
+                gotoxy(x, j+1); cout << "Enter the Discount(%) Only 10(%) - 70(%): ";
+                gotoxy(x+40, j+1); cin >> discount; 
+                while(!isValidate("packageDiscount", discount))
+                {
+                    gotoxy(x + 40, j); cout << "                            ";
+                    gotoxy(x + 40, j+1); cin >> discount;
+                }
+                
                 /* id calculation */
-                if(labDepartmentCount == 0)
-                    id = "LB001";
-                else{
-                    id = labDepartemtID[labDepartmentCount-1];
+                if(packageCount == 0)
+                    id = "P001";
+                else
+                {
+                    id = packageID[packageCount - 1];
                     int idx = id.length() - 1;
                     while(idx >= 1)
                     {
@@ -2421,10 +2455,19 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                     }
                 }
                 
-                labDepartemtID[labDepartmentCount] = id;
-                labDepartmentName[labDepartmentCount] = name;
-                labDepartmentDate[labDepartmentCount] = "2024-11-15";
-                labDepartmentCount++;
+                packageID[packageCount] = id;
+                packageName[packageCount] = name;
+                packageDisc[packageCount] = discount;
+
+                price = price - ((stof(discount) * price) / 100.0);
+                packageRate[packageCount] = to_string(price);
+
+                for(int i = 0; i < count ; i++)
+                {
+                    packageTests[packageCount][i] = tests[i];
+                }
+
+                packageCount++;
             }
             else{
                 gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
@@ -2797,6 +2840,58 @@ bool yesNoPopup(int x, int y)
         }
         menu(options, "yesNoPopup", size, option, x, y + 2);
         Sleep(200);
+    }
+}
+bool isValidate(string type, string content)
+{
+    if(type == "username")
+    {
+        for(int i = 0; content[i] != '\0' ; i++)
+        {
+            if(!((content[i] >= 48 && content[i] <= 57) || (content[i] >= 97 && content[i] <= 122) || content[i] == '_' || content[i] == '.'))
+                return false;
+        }
+        return true;
+    }
+    else if(type == "packageTestCount")
+    {
+        int idx = 0;
+        while (content[idx] != '\0')
+        {
+            if (!(content[idx] >= 50 && content[idx] <= 53))
+                return false;
+            if (content[idx] == ' ')
+                return false;
+            idx++;
+        }
+        if (idx != 1 )
+            return false;
+        
+        return true;
+    }
+    else if(type == "labTestIDExists")
+    {
+        for(int i = 0; i < labTestCount; i++)
+        {
+            if(content == labTestID[i])
+                return true;
+        }
+        return false;
+    }
+    else if(type == "packageDiscount")
+    {
+        int idx = 0;
+        while (content[idx] != '\0')
+        {
+            if (!(content[idx] >= 48 && content[idx] <= 57))
+                return false;
+            if (content[idx] == ' ')
+                return false;
+            idx++;
+        }
+        if (idx != 2 || content[0] == 48)
+            return false;
+        return true;
     }
 }
 void removePopup(int x, int y)
