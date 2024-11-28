@@ -33,12 +33,21 @@ bool title(int, int);
 bool yesNoPopup(int, int);                                      //* x-chord , y-chord
 void removePopup(int, int);                                     //~ x-chord, y-chord
 void menu(string[], string, int, int, int, int);                //* menu choices array , menu heading , no. of choices, choice, x-coord, y-coord
-int isLogin(string, string);
-bool clear(int, int, int, int);
+int isLogin(string, string);                                    //~ username, password
+bool clear(int, int, int, int);                                 //* x-start, y-start, x-end, y-end
 bool viewData(string, int, int);                                //~ page Name , x-coord, y-coord
 void sideBars(string, string[], int, int);                      //* page Name , menu name
 void contentMenu(string, string[], int, int);                   //~ page Name , menu name
 bool isValidate(string, string);
+string labTestIDValid(string tests[], string id, int i){
+    for(int x = 0; x < i ; x++)
+    {
+        if(id == tests[x]){
+            return  "00000";
+        }
+    }
+    return id;
+}
 
 //! session
 bool isSessionStated = false;
@@ -78,7 +87,7 @@ int machineCount = 0;
 string sopID[dataSize], sop[dataSize], sopDate[dataSize]; int sopCount = 0;
 
 //^ packages
-string packageID[dataSize], packageName[dataSize],packageTestCount[dataSize], packageTests[dataSize][5], packageRate[dataSize], packageDisc[dataSize];
+string packageID[dataSize], packageName[dataSize], packageTestCount[dataSize], packageTests[dataSize][5], packageRate[dataSize], packageDisc[dataSize];
 int packageCount;
 
 main()
@@ -2418,18 +2427,12 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                         gotoxy(x, j); cout << "Enter the valid LabTest ID for the test " << i+1 <<" : ";
                         gotoxy(x+50, j); cin >> tests[i];
 
-                        for(int x = 0; x < i ; x++)
-                        {
-                            if(tests[i] == tests[x]){
-                                tests[i] = "00000";
-                                break;
-                            }
-                        }
-
+                        tests[i] = labTestIDValid(tests, tests[i], i);
                         while(!isValidate("labTestIDExists", tests[i]))
                         {   
                             gotoxy(x + 50, j); cout << "                       ";
                             gotoxy(x + 50, j); cin >> tests[i];
+                            tests[i] = labTestIDValid(tests, tests[i], i);
                         }
 
                         
@@ -2445,12 +2448,12 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                         j++;
                     }
 
-                    gotoxy(x, j+1); cout << "Enter the Discount(%) Only 10(%) - 70(%): ";
-                    gotoxy(x+40, j+1); getline(cin, discount);
+                    gotoxy(x, j+1); cout << "Enter the Discount(%) Only 10(%) - 70(%) : ";
+                    gotoxy(x+50, j+1); getline(cin, discount);
                     while(!isValidate("packageDiscount", discount))
                     {
-                        gotoxy(x + 40, j+1); cout << "                            ";
-                        gotoxy(x + 40, j+1); getline(cin, discount);
+                        gotoxy(x + 50, j+1); cout << "                            ";
+                        gotoxy(x + 50, j+1); getline(cin, discount);
                     }
                     
                     /* id calculation */
@@ -2482,10 +2485,9 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                     packageRate[packageCount] = to_string(static_cast<int>(round(price)));
 
                     for(int i = 0; i < count ; i++)
-                    {
                         packageTests[packageCount][i] = tests[i];
-                    }
-
+                        
+                    packageTestCount[packageCount] = count;
                     packageCount++;
                 }
                 else{
@@ -2496,8 +2498,6 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
             {
                 gotoxy(x, y); cout << "ADD ATLEAST TWO OR MORE LABTESTS";
             }
-            
-
         }
     }
     return true;
