@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <conio.h>
 #include <ctime>
+#include <cmath>
 #include <ios>
 #include <limits>
 using namespace std;
@@ -67,7 +68,7 @@ int labDepartmentCount = 0;
 
 //^ lab Test
 string labTestID[dataSize], labTestName[dataSize], labTestRate[dataSize], labTestGroup[dataSize], labTestMachine[dataSize], labTestUnit[dataSize], labTestFreq[dataSize], labTestTime[dataSize], labTestComments[dataSize], labTestSpecimen[dataSize];
-int labTestCount = 0;
+int labTestCount = 2;
 
 //^ Machines
 string machineID[dataSize], machineName[dataSize], machineDescription[dataSize], machineQuantity[dataSize];
@@ -83,6 +84,10 @@ int packageCount;
 main()
 {
     screenSetup(105, 40, 120, 40);
+
+    labTestID[0] = "LT001"; labTestRate[0] = "250";
+    labTestID[1] = "LT002"; labTestRate[1] = "300";
+
     //& roles
     string roles_id[11] = {"R000", "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009", "R010"};
     string roles_name[11] = {"Receptionist", "Phelbotomist", "Technician", "Companies & Doctors", "Courier", "Home Sampling", "Collection Center", "Manager", "Admin", "Super Admin"};
@@ -1487,7 +1492,7 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                 gotoxy(x, y); cout << "\033[4mADD NEW SPECIMEN\033[0m";
                 gotoxy(x, y+3); cout << "Enter the Specimen Name : ";
                 gotoxy(x + 40, y+3);
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cin.ignore();
                 getline(cin, name);
                 gotoxy(x, y+5); cout << "Enter the Specimen Description : ";
                 gotoxy(x + 40, y+5); getline(cin, description);
@@ -1537,7 +1542,7 @@ bool specimenPage(int x, int y, string title, string menu[], int option, int siz
                         string name, description;
                         gotoxy(x, y+5); cout << "Change the Specimen Name from " << specimenName[i] << " to ";
                         gotoxy(x + 60, y+5);
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        cin.ignore();
                         getline(cin, name);
                         gotoxy(x, y+7); cout << "Change the Specimen Description from " << specimenDescription[i] << " to ";
                         gotoxy(x + 60, y+7); getline(cin, description);
@@ -2364,7 +2369,7 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
             gotoxy(x + 60, y); cout<<"[ ] DELETE Packages";
             y++;           
             gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |            \033[4mNAME\033[0m            |             \033[4mDESCRIPTION\033[0m              |";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |          \033[4mNAME\033[0m          |               \033[4mLABTESTS\033[0m                |    \033[4mRATE\033[0m    |";
             gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
             int j = 4;
             if(packageCount == 0)
@@ -2387,91 +2392,111 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
         else if(_ACTIVE_ACTION == "ADD")
         {
             sideBars(title, menu, option, size);
+            if(true) //labTestCount > 1
+            {
+                if(packageCount < dataSize){
+                    string id, name, testCount, discount;
+                    float price = 0;
+                    gotoxy(x, y); cout << "\033[4mADD New Packages\033[0m";
+                    gotoxy(x, y+3); cout << "Enter the Packages Name : ";
+                    gotoxy(x + 40, y+3);
+                    cin.ignore();
+                    getline(cin, name);
+                    gotoxy(x, y+5); cout << "You can add 2 - 5 tests in each package. Only Number Type Data Allowed";
+                    gotoxy(x, y+7); cout << "Enter the number of tests you want to add : ";
+                    gotoxy(x + 50, y+7); getline(cin, testCount);
+                    while(!isValidate("packageTestCount", testCount))
+                    {
+                        gotoxy(x + 50, y+7); cout << "                            ";
+                        gotoxy(x + 50, y+7); getline(cin, testCount);
+                    }
+                    int count = stoi(testCount), j = y + 9;
+                    string tests[count];
+                    for(int i = 0; i < count ; i++)
+                    {
+                        bool isTestRepeat = false;
+                        gotoxy(x, j); cout << "Enter the valid LabTest ID for the test " << i+1 <<" : ";
+                        gotoxy(x+50, j); cin >> tests[i];
+
+                        for(int x = 0; x < i ; x++)
+                        {
+                            if(tests[i] == tests[x]){
+                                tests[i] = "00000";
+                                break;
+                            }
+                        }
+
+                        while(!isValidate("labTestIDExists", tests[i]))
+                        {   
+                            gotoxy(x + 50, j); cout << "                       ";
+                            gotoxy(x + 50, j); cin >> tests[i];
+                        }
+
+                        
+                        
+                        for(int k = 0; k < labTestCount; k++)
+                        {
+                            if(labTestID[k] == tests[i])
+                            {
+                                price += stof(labTestRate[i]);
+                                break;
+                            }
+                        }
+                        j++;
+                    }
+
+                    gotoxy(x, j+1); cout << "Enter the Discount(%) Only 10(%) - 70(%): ";
+                    gotoxy(x+40, j+1); getline(cin, discount);
+                    while(!isValidate("packageDiscount", discount))
+                    {
+                        gotoxy(x + 40, j+1); cout << "                            ";
+                        gotoxy(x + 40, j+1); getline(cin, discount);
+                    }
+                    
+                    /* id calculation */
+                    if(packageCount == 0)
+                        id = "P001";
+                    else
+                    {
+                        id = packageID[packageCount - 1];
+                        int idx = id.length() - 1;
+                        while(idx >= 1)
+                        {
+                            if(id[idx] < '9')
+                            {
+                                id[idx] += 1;
+                                break;
+                            }
+                            else{
+                                id[idx] = '0';
+                                idx--;
+                            }
+                        }
+                    }
+                    
+                    packageID[packageCount] = id;
+                    packageName[packageCount] = name;
+                    packageDisc[packageCount] = discount;
+
+                    price = price - ((stof(discount) * price) / 100.0);
+                    packageRate[packageCount] = to_string(static_cast<int>(round(price)));
+
+                    for(int i = 0; i < count ; i++)
+                    {
+                        packageTests[packageCount][i] = tests[i];
+                    }
+
+                    packageCount++;
+                }
+                else{
+                    gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
+                }
+            }
+            else
+            {
+                gotoxy(x, y); cout << "ADD ATLEAST TWO OR MORE LABTESTS";
+            }
             
-            if(packageCount < dataSize){
-                string id, name, testCount, discount;
-                float price = 0;
-                gotoxy(x, y); cout << "\033[4mADD New Packages\033[0m";
-                gotoxy(x, y+3); cout << "Enter the Packages Name : ";
-                gotoxy(x + 40, y+3);
-                cin.ignore();
-                getline(cin, name);
-                gotoxy(x, y+5); cout << "You can add 2 - 5 tests in each package. Only Number Type Data Allowed";
-                gotoxy(x, y+7); cout << "Enter the number of tests you want to add : ";
-                gotoxy(x + 40, y+7); getline(cin, testCount);
-                while(!isValidate("packageTestCount", testCount))
-                {
-                    gotoxy(x + 40, y+7); cout << "                            ";
-                    gotoxy(x + 40, y+7); getline(cin, testCount);
-                }
-                int count = stoi(testCount), j = y + 9;
-                string tests[count];
-                for(int i = 0; i < count ; i++)
-                {
-                    gotoxy(x, j); cout << "Enter the valid LabTest ID for the test " << i+1 <<" : ";
-                    gotoxy(x+40, j); cin >> tests[i];
-                    while(!isValidate("labTestIDExists", tests[i]))
-                    {
-                        gotoxy(x + 40, j); cout << "                            ";
-                        gotoxy(x + 40, j); cin >> tests[i];
-                    }
-                    for(int i = 0; i < labTestCount; i++)
-                    {
-                        if(labTestID[i] == tests[i])
-                        {
-                            price += stof(labTestRate[i]);
-                            break;
-                        }
-                    }
-                    j++;
-                }
-
-                gotoxy(x, j+1); cout << "Enter the Discount(%) Only 10(%) - 70(%): ";
-                gotoxy(x+40, j+1); cin >> discount; 
-                while(!isValidate("packageDiscount", discount))
-                {
-                    gotoxy(x + 40, j); cout << "                            ";
-                    gotoxy(x + 40, j+1); cin >> discount;
-                }
-                
-                /* id calculation */
-                if(packageCount == 0)
-                    id = "P001";
-                else
-                {
-                    id = packageID[packageCount - 1];
-                    int idx = id.length() - 1;
-                    while(idx >= 1)
-                    {
-                        if(id[idx] < '9')
-                        {
-                            id[idx] += 1;
-                            break;
-                        }
-                        else{
-                            id[idx] = '0';
-                            idx--;
-                        }
-                    }
-                }
-                
-                packageID[packageCount] = id;
-                packageName[packageCount] = name;
-                packageDisc[packageCount] = discount;
-
-                price = price - ((stof(discount) * price) / 100.0);
-                packageRate[packageCount] = to_string(price);
-
-                for(int i = 0; i < count ; i++)
-                {
-                    packageTests[packageCount][i] = tests[i];
-                }
-
-                packageCount++;
-            }
-            else{
-                gotoxy(x, y); cout << "YOU HAVE REACHED MAX STORAGE LIMIT.";
-            }
 
         }
     }
