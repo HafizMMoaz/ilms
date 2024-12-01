@@ -2378,7 +2378,7 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
             gotoxy(x + 60, y); cout<<"[ ] DELETE Packages";
             y++;           
             gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |          \033[4mNAME\033[0m          |               \033[4mLABTESTS\033[0m                |    \033[4mRATE\033[0m    |";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |         \033[4mNAME\033[0m         |    \033[4mLABTESTS\033[0m    |    \033[4mRATE\033[0m    | \033[4mDISCOUNT\033[0m |";
             gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
             int j = 4;
             if(packageCount == 0)
@@ -2401,7 +2401,7 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
         else if(_ACTIVE_ACTION == "ADD")
         {
             sideBars(title, menu, option, size);
-            if(true) //labTestCount > 1
+            if(labTestCount > 1)
             {
                 if(packageCount < dataSize){
                     string id, name, testCount, discount;
@@ -2435,8 +2435,6 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                             tests[i] = labTestIDValid(tests, tests[i], i);
                         }
 
-                        
-                        
                         for(int k = 0; k < labTestCount; k++)
                         {
                             if(labTestID[k] == tests[i])
@@ -2480,13 +2478,13 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                     packageID[packageCount] = id;
                     packageName[packageCount] = name;
                     packageDisc[packageCount] = discount;
-
+                    /* price calculation */
                     price = price - ((stof(discount) * price) / 100.0);
                     packageRate[packageCount] = to_string(static_cast<int>(round(price)));
 
                     for(int i = 0; i < count ; i++)
                         packageTests[packageCount][i] = tests[i];
-                        
+
                     packageTestCount[packageCount] = count;
                     packageCount++;
                 }
