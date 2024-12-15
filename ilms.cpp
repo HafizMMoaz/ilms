@@ -39,15 +39,7 @@ bool viewData(string, int, int);                                //~ page Name , 
 void sideBars(string, string[], int, int);                      //* page Name , menu name
 void contentMenu(string, string[], int, int);                   //~ page Name , menu name
 bool isValidate(string, string);
-string labTestIDValid(string tests[], string id, int i){
-    for(int x = 0; x < i ; x++)
-    {
-        if(id == tests[x]){
-            return  "00000";
-        }
-    }
-    return id;
-}
+string labTestIDValid(string[], string, int);
 
 //! session
 bool isSessionStated = false;
@@ -77,7 +69,7 @@ int labDepartmentCount = 0;
 
 //^ lab Test
 string labTestID[dataSize], labTestName[dataSize], labTestRate[dataSize], labTestGroup[dataSize], labTestMachine[dataSize], labTestUnit[dataSize], labTestFreq[dataSize], labTestTime[dataSize], labTestComments[dataSize], labTestSpecimen[dataSize];
-int labTestCount = 2;
+int labTestCount = 0;
 
 //^ Machines
 string machineID[dataSize], machineName[dataSize], machineDescription[dataSize], machineQuantity[dataSize];
@@ -93,9 +85,6 @@ int packageCount;
 main()
 {
     screenSetup(105, 40, 120, 40);
-
-    labTestID[0] = "LT001"; labTestRate[0] = "250";
-    labTestID[1] = "LT002"; labTestRate[1] = "300";
 
     //& roles
     string roles_id[11] = {"R000", "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009", "R010"};
@@ -786,7 +775,6 @@ main()
                             }
                         }
                     }
-                    
                 }
             }
             else if (_ACTIVE_PAGE == "TESTRATELIST")
@@ -1387,11 +1375,9 @@ bool mainScreen(int x, int y)
     return true;
 }
 bool dashboardPage(int x, int y)
-{
-    
+{ 
     if (mainScreen(0, 0))
     {
-        
         gotoxy(x - 4, y); cout<<"WELCOME! \1 " << session("fname");
         gotoxy(x - 4, y + 1); cout<<"------------------------------------------------";
 
@@ -2916,6 +2902,15 @@ bool isValidate(string type, string content)
             return false;
         return true;
     }
+}
+string labTestIDValid(string tests[], string id, int i){
+    for(int x = 0; x < i ; x++)
+    {
+        if(id == tests[x]){
+            return  "00000";
+        }
+    }
+    return id;
 }
 void removePopup(int x, int y)
 {
