@@ -69,7 +69,7 @@ int labDepartmentCount = 0;
 
 //^ lab Test
 string labTestID[dataSize], labTestName[dataSize], labTestRate[dataSize], labTestGroup[dataSize], labTestMachine[dataSize], labTestUnit[dataSize], labTestFreq[dataSize], labTestTime[dataSize], labTestComments[dataSize], labTestSpecimen[dataSize];
-int labTestCount = 0;
+int labTestCount = 2;
 
 //^ Machines
 string machineID[dataSize], machineName[dataSize], machineDescription[dataSize], machineQuantity[dataSize];
@@ -85,6 +85,8 @@ int packageCount;
 main()
 {
     screenSetup(105, 40, 120, 40);
+    labTestID[0] = "LT001"; labTestRate[0] = "250";
+    labTestID[1] = "LT002"; labTestRate[1] = "350"; 
 
     //& roles
     string roles_id[11] = {"R000", "R001", "R002", "R003", "R004", "R005", "R006", "R007", "R008", "R009", "R010"};
@@ -738,12 +740,51 @@ main()
                             size = sizeof(innerContent) / sizeof(innerContent[0]);
                             contentMenu("Packages", innerContent, option, size);
                         }
-                        else if(_ACTIVE_ACTION == "ADD"){
+                        else if(_ACTIVE_ACTION == "ADD")
+                        {
                             option = 0;
                             string innerMenuADD[2] = {"\033[4mA\033[0mDD Another Packages", "\033[4mB\033[0mack"};
                             size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
                             menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
                             while(true){
+                                if (GetAsyncKeyState(VK_DOWN))
+                                {
+                                    if (option < size - 1)
+                                    {
+                                        option++;
+                                    }
+                                }
+                                else if (GetAsyncKeyState(VK_UP))
+                                {
+                                    if (option > 0)
+                                    {
+                                        option--;
+                                    }
+                                }
+                                else if(GetAsyncKeyState(VK_SPACE))
+                                {
+                                    if(option == 0)
+                                    {
+                                        break;
+                                    }
+                                    else if(option == 1)
+                                    {
+                                        _ACTIVE_ACTION = "VIEW";
+                                        break;
+                                    }
+                                }
+                                menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                                Sleep(200);
+                            }
+                        }
+                        else if(_ACTIVE_ACTION == "EDIT")
+                        {
+                            option = 0;
+                            string innerMenuADD[2] = {"\033[4mE\033[0mDIT Another Packages", "\033[4mB\033[0mack"};
+                            size = sizeof(innerMenuADD) / sizeof(innerMenuADD[0]);
+                            menu(innerMenuADD, "innerMenuADD", size, option, 27, 35);
+                            while(true)
+                            {
                                 if (GetAsyncKeyState(VK_DOWN))
                                 {
                                     if (option < size - 1)
@@ -2364,7 +2405,7 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
             gotoxy(x + 60, y); cout<<"[ ] DELETE Packages";
             y++;           
             gotoxy(x, y + 1); cout<<"-------------------------------------------------------------------------------------------";
-            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |         \033[4mNAME\033[0m         |    \033[4mLABTESTS\033[0m    |    \033[4mRATE\033[0m    | \033[4mDISCOUNT\033[0m |";
+            gotoxy(x, y + 2); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m  |             \033[4mNAME\033[0m             |      \033[4mLABTESTS\033[0m      |     \033[4mRATE\033[0m     | \033[4mDISCOUNT\033[0m |";
             gotoxy(x, y + 3); cout<<"-------------------------------------------------------------------------------------------";
             int j = 4;
             if(packageCount == 0)
@@ -2377,10 +2418,24 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                 for(int i = 0; i < packageCount ; i++){
                     gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
                     gotoxy(x + 7 , y + j); cout << packageID[i]; gotoxy(x + 12, y + j); cout << "|";
-                    gotoxy(x + 14 , y + j); cout << packageName[i]; gotoxy(x + 41, y + j); cout << "|";
-                    gotoxy(x + 43 , y + j); cout << packageRate[i]; gotoxy(x + 90, y + j); cout << "|";
-                    gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
-                    j+=2;
+                    gotoxy(x + 14 , y + j); cout << packageName[i]; gotoxy(x + 43, y + j); cout << "|";
+                    gotoxy(x + 66 , y + j); cout << packageRate[i]; gotoxy(x + 79, y + j); cout << "|";
+                    gotoxy(x + 81 , y + j); cout << packageDisc[i] << "%"; gotoxy(x + 90, y + j); cout << "|";
+
+                    int tests = stoi(packageTestCount[i]);
+                    for(int k = 0; k < tests; k++)
+                    {
+                        gotoxy(x, y + j); cout << "|";
+                        gotoxy(x + 5, y + j); cout << "|";
+                        gotoxy(x + 12, y + j); cout << "|";
+                        gotoxy(x + 43, y + j); cout << "|";
+                        gotoxy(x + 45 , y + j); cout << k + 1 << ") " << packageTests[i][k]; gotoxy(x + 64, y + j);cout << "|"; j++;
+                        gotoxy(x + 79, y + j); cout << "|";
+                        gotoxy(x + 90, y + j); cout << "|";
+                    }
+
+                    gotoxy(x, y + j); cout<<"-------------------------------------------------------------------------------------------";
+                    j++;
                 }
             }
         }
@@ -2471,7 +2526,7 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                     for(int i = 0; i < count ; i++)
                         packageTests[packageCount][i] = tests[i];
 
-                    packageTestCount[packageCount] = count;
+                    packageTestCount[packageCount] = to_string(count);
                     packageCount++;
                 }
                 else{
@@ -2483,6 +2538,37 @@ bool packagesPage(int x, int y, string title, string menu[], int option, int siz
                 gotoxy(x, y); cout << "ADD ATLEAST TWO OR MORE LABTESTS";
             }
         }
+        else if(_ACTIVE_ACTION == "EDIT")
+        {
+            sideBars(title, menu, option, size);
+            if(packageCount > 0)
+            {
+                string id, msg = "INVALID ID";
+                gotoxy(x, y); cout << "\033[4mEDIT Packages\033[0m";
+                gotoxy(x, y+3); cout << "Enter the Package's ID to be EDITED : ";
+                cin >> id;
+                for(int i = 0; i < packageCount; i++)
+                {
+                    if(packageID[i] == id)
+                    {
+                        string name;
+                        gotoxy(x, y+5); cout << "Change Package Name from " << packageName[i] << " to "; 
+                        gotoxy(x + 60, y+5);
+                        cin.ignore();
+                        getline(cin, name);
+                        packageName[i] = name;
+                        
+                        msg = "DATA EDITED SUCCESSFULLY";
+                        break;
+                    }
+                }
+                gotoxy(x, y + 9); cout << msg;
+            }
+            else
+            {
+                gotoxy(x, y); cout << "THERE IS NOTHING TO EDIT.";
+            }
+        }
     }
     return true;
 }
@@ -2491,7 +2577,7 @@ bool rateListPage(int x, int y)
     if (mainScreen(0, 0))
     {
         gotoxy(x, y); cout<<"-------------------------------------------------------------------------------------------";
-        gotoxy(x, y + 1); cout<<"| \033[4mSr\033[0m |             \033[4mTEST NAME\033[0m                     |                  \033[4mRATE\033[0m                  |";
+        gotoxy(x, y + 1); cout<<"| \033[4mSr\033[0m |  \033[4mID\033[0m   |        \033[4mTEST NAME\033[0m                  |                  \033[4mRATE\033[0m                  |";
         gotoxy(x, y + 2); cout<<"-------------------------------------------------------------------------------------------";
         
         int j = 3;
@@ -2504,7 +2590,8 @@ bool rateListPage(int x, int y)
         {
             for(int i = 0; i < labTestCount ; i++){
                 gotoxy(x, y + j); cout << "|"; gotoxy(x + 2, y + j); cout << i + 1 << "."; gotoxy(x + 5, y + j); cout << "|";
-                gotoxy(x + 7 , y + j); cout << labTestName[i]; gotoxy(x + 49, y + j); cout << "|";
+                gotoxy(x + 7 , y + j); cout << labTestID[i]; gotoxy(x + 13, y + j); cout << "|";
+                gotoxy(x + 15 , y + j); cout << labTestName[i]; gotoxy(x + 49, y + j); cout << "|";
                 gotoxy(x + 51 , y + j); cout << labTestRate[i]; gotoxy(x + 90, y + j); cout << "|";
                 gotoxy(x, y + j + 1); cout<<"-------------------------------------------------------------------------------------------";
                 j+=2;
