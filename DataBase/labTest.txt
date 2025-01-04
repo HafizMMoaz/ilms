@@ -1,0 +1,3 @@
+LT001,pecimen,350,ewEntity,machine,mg/dl,daily,2hrs,comments,specimen
+LT002,abtest2,400,moaz,machine,mg/dl,monthly,3hrs,no-comments,specimen
+LT003,aTEst,400,LabDepartment,machine,mg/dl,daily,2hrs,n-comments,specimen

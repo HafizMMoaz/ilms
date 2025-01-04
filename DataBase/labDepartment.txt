@@ -1,0 +1,2 @@
+LD002,ewEntity,2024-12-19
+LD003,LabDepartment,2025-01-01
