@@ -1326,7 +1326,7 @@ main()
                         {
                             option = 0;
                             size = sizeof(innerContent) / sizeof(innerContent[0]);
-                            contentMenu("Patient Reg", innerContent, option, size);
+                            contentMenu("Patient", innerContent, option, size);
                         }
                         else if(_ACTIVE_ACTION == "ADD")
                         {
@@ -1691,7 +1691,7 @@ void menu(string menu[], string heading, int size, int option, int x, int y)
             cout << " [" << op[i] << "] " << menu[i];
         }
     }
-    else if (heading == "Specimen" || heading == "Lab Department" || heading == "Lab Test" || heading == "Packages" || heading == "Rate List" || heading == "Machine" || heading == "SOPS" || heading == "Query" || heading == "Patient Reg" || heading == "Company")
+    else if (heading == "Specimen" || heading == "Lab Department" || heading == "Lab Test" || heading == "Packages" || heading == "Rate List" || heading == "Machine" || heading == "SOPS" || heading == "Query" || heading == "Patient" || heading == "Company")
     {
         for (int i = 0; i < size; i++)
         {
@@ -3684,7 +3684,7 @@ bool patientRegisterPage(int x, int y, string title, string menus[], int option,
                                     testAdded = true;
                                     break;
                                 }
-                                menu(packageName, "selection", size, op, x + 7, y+5);
+                                menu(packageName, "selection", size, op, x + 7, y+9);
                                 Sleep(200);
                             }
                         }
@@ -3751,7 +3751,6 @@ bool patientRegisterPage(int x, int y, string title, string menus[], int option,
                     }
                 }
                 
-
                 /* id calculation */
                 if(patientCount == 0)
                     id = "P001";
@@ -3814,6 +3813,7 @@ bool patientRegisterPage(int x, int y, string title, string menus[], int option,
                 {
                     testStatus[patientCount][k] = "PEND";
                 }
+
                 patientStatus[patientCount] = "REGISTERED";
                 patientPrice[patientCount] = to_string(price);
                 patientReceivedAmount[patientCount] = to_string(received);
@@ -3898,6 +3898,7 @@ bool patientRegisterPage(int x, int y, string title, string menus[], int option,
     }
     return true;
 }
+
 bool queriesPage(int x, int y, string title, string menu[], int option, int size)
 {
     if(mainScreen(0,0))
@@ -4341,6 +4342,8 @@ bool coorparatePage(int x, int y, string title, string menus[], int option, int 
     }
     return true;
 }
+
+
 bool splashScreen(int x, int y)
 {
     system("cls");
