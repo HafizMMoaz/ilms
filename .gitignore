@@ -1,0 +1,7 @@
+# Build artifact (rebuild with build.bat)
+ilms.exe
+*.o
+
+# Runtime-generated
+Backup/
+DataBase/logs.txt
