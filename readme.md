@@ -1,5 +1,7 @@
 # 🧪 ILMS – Integrated Lab Management System
 
+[![Build & Test](https://github.com/HafizMMoaz/ilms/actions/workflows/build.yml/badge.svg)](https://github.com/HafizMMoaz/ilms/actions/workflows/build.yml)
+
 ![ILMS Screenshot](./Screenshot.png)
 
 A console-based **Integrated Lab Management System** for medical laboratories,

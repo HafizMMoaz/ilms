@@ -1,0 +1,37 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Build & test (Windows / MinGW g++)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MinGW-w64
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: Compiler version
+        run: g++ --version
+
+      # Compiles every module into ilms.exe (verifies the whole project builds,
+      # including the Windows-specific console/backup/dirent code).
+      - name: Build (build.bat)
+        shell: cmd
+        run: build.bat
+
+      # The interactive app needs a real console, so CI runs the headless model
+      # tests instead: CSV parsing, ID generation, and Repository CRUD.
+      - name: Build & run model tests
+        shell: cmd
+        run: g++ -std=c++17 -Wall -Wextra -Imodel tests/test_model.cpp model/Utils.cpp -o test_model.exe && test_model.exe
