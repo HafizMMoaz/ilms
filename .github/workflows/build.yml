@@ -12,26 +12,39 @@ jobs:
     name: Build & test (Windows / MinGW g++)
     runs-on: windows-latest
 
+    defaults:
+      run:
+        shell: msys2 {0}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up MinGW-w64
-        uses: egor-tensin/setup-mingw@v2
+      - name: Set up MSYS2 + MinGW-w64 g++
+        uses: msys2/setup-msys2@v2
         with:
-          platform: x64
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
 
       - name: Compiler version
         run: g++ --version
 
-      # Compiles every module into ilms.exe (verifies the whole project builds,
-      # including the Windows-specific console/backup/dirent code).
-      - name: Build (build.bat)
-        shell: cmd
-        run: build.bat
+      # Compiles every module (verifies the whole project builds, including the
+      # Windows-specific console / backup / dirent code). Mirrors build.bat.
+      - name: Build ILMS
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Imodel -Iview -Icontroller \
+            main.cpp \
+            model/Utils.cpp model/Session.cpp model/Validator.cpp model/Database.cpp \
+            model/Backup.cpp model/Logger.cpp \
+            view/Console.cpp view/ConsoleView.cpp \
+            controller/App.cpp \
+            -o ilms.exe
 
       # The interactive app needs a real console, so CI runs the headless model
       # tests instead: CSV parsing, ID generation, and Repository CRUD.
       - name: Build & run model tests
-        shell: cmd
-        run: g++ -std=c++17 -Wall -Wextra -Imodel tests/test_model.cpp model/Utils.cpp -o test_model.exe && test_model.exe
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Imodel tests/test_model.cpp model/Utils.cpp -o test_model.exe
+          ./test_model.exe
