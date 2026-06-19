@@ -4,4 +4,5 @@ ilms.exe
 
 # Runtime-generated
 Backup/
+Exports/
 DataBase/logs.txt

@@ -40,6 +40,8 @@ class App
     void setupModule();
     void patientModule();
     void patientRecords();
+    void sampleReceiving(); // collect specimens across patients
+    void resultEntry();     // enter results for collected specimens
     void patientSummary();
     void rateListView();
     void backupModule();
@@ -84,16 +86,34 @@ class App
     void editSop(int i);
     void deleteSop(int i);
 
-    // patient registration + management of an existing patient
-    void registerPatient();
-    void managePatient(int i);     // per-patient menu (add test / collect specimen)
-    void addTestToPatient(int i);  // append a new lab test to an existing patient
-    void collectSpecimen(int i);   // mark a test's specimen collected (now or later)
-    void deletePatient(int i);
-    // Lets the user attach a package or pick individual tests. Fills in the
-    // patient's tests/testCount/price/discount. Returns false if there is
-    // nothing in the system to register (no packages and no lab tests).
-    bool choosePatientTests(Patient &p, double &price);
+    // patient registration + management (relational: patient/invoice/test/payment)
+    void registerPatient();        // new patient + first visit
+    void managePatient(int i);     // per-patient menu (new visit / invoices)
+    void deletePatient(int i);     // cascades to the patient's invoices/tests/payments
+    void patientInvoices(const std::string &patientId); // list a patient's invoices
+    void invoiceDetail(const std::string &invoiceId);   // tests + payments + balance
+    void addPayment(const std::string &invoiceId);
+
+    // Creates an invoice (+ its tests + an opening payment) for an existing
+    // patient. Returns the new invoice id, or "" if nothing could be ordered.
+    std::string orderTests(const std::string &patientId);
+    // Adds PatientTest rows for the chosen package/individual tests; accumulates
+    // the gross total and (for a package) sets the discount. Returns false if
+    // there is nothing to order.
+    bool chooseTests(const std::string &invoiceId, const std::string &patientId,
+                     double &gross, std::string &discount);
+
+    // Billing helpers.
+    double invoiceNet(const std::string &invoiceId);
+    double invoicePaid(const std::string &invoiceId);
+    double patientBalance(const std::string &patientId);
+
+    // Export the currently shown table (CSV / HTML) + printable documents.
+    void exportTable(const std::string &title,
+                     const std::vector<std::string> &headers,
+                     const std::vector<std::vector<std::string>> &rows);
+    void printInvoice(const std::string &invoiceId);
+    void printReceipt(const std::string &invoiceId, const std::string &paymentId);
 
 public:
     explicit App(View &v) : view(v) {}

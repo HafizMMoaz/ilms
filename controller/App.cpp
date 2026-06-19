@@ -2,6 +2,7 @@
 #include "Console.h"
 #include "Validator.h"
 #include "Backup.h"
+#include "Export.h"
 
 #include <vector>
 #include <string>
@@ -200,21 +201,184 @@ void App::backupModule()
 }
 
 // ---------------------------------------------------------------------------
-// PATIENT area : records (register/manage) and a read-only summary.
+// PATIENT area (relational): records + sample receiving + result entry +
+// summary. A visit creates an Invoice with PatientTest rows; money is tracked
+// in Payment rows, so a balance is netTotal - sum(payments).
 // ---------------------------------------------------------------------------
 void App::patientModule()
 {
     while (true)
     {
         view.clear();
-        int c = view.menu("PATIENT", {"Patient Records", "Patient Summary", "Back"});
-        if (c == 0)
-            patientRecords();
-        else if (c == 1)
-            patientSummary();
-        else
-            return;
+        int c = view.menu("PATIENT",
+                          {"Patient Records", "Sample Receiving", "Result Entry",
+                           "Patient Summary", "Back"});
+        switch (c)
+        {
+        case 0: patientRecords(); break;
+        case 1: sampleReceiving(); break;
+        case 2: resultEntry(); break;
+        case 3: patientSummary(); break;
+        default: return;
+        }
     }
+}
+
+// ---- billing helpers ------------------------------------------------------
+double App::invoiceNet(const std::string &invoiceId)
+{
+    int k = db.invoices.indexOf(invoiceId);
+    if (k < 0) return 0;
+    try { return std::stod(db.invoices.at(k).netTotal); } catch (...) { return 0; }
+}
+
+double App::invoicePaid(const std::string &invoiceId)
+{
+    double sum = 0;
+    for (int i = 0; i < db.payments.count(); i++)
+        if (db.payments.at(i).invoiceId == invoiceId)
+            try { sum += std::stod(db.payments.at(i).amount); } catch (...) {}
+    return sum;
+}
+
+double App::patientBalance(const std::string &patientId)
+{
+    double bal = 0;
+    for (int i = 0; i < db.invoices.count(); i++)
+        if (db.invoices.at(i).patientId == patientId)
+        {
+            const std::string &iid = db.invoices.at(i).id;
+            bal += invoiceNet(iid) - invoicePaid(iid);
+        }
+    return bal;
+}
+
+// ---- export + printable documents -----------------------------------------
+
+// Helper: make a filesystem-safe slug from a title.
+static std::string slug(const std::string &s)
+{
+    std::string out;
+    for (char c : s)
+    {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
+            out += c;
+        else if (out.empty() || out.back() != '_')
+            out += '_';
+    }
+    while (!out.empty() && out.back() == '_')
+        out.pop_back();
+    return out.empty() ? "table" : out;
+}
+
+void App::exportTable(const std::string &title,
+                      const std::vector<std::string> &headers,
+                      const std::vector<std::vector<std::string>> &rows)
+{
+    view.clear();
+    int fmt = view.menu("EXPORT '" + title + "'", {"CSV", "HTML", "Cancel"});
+    if (fmt == 2)
+        return;
+
+    std::string stamp = Console::date(); // YYYY-MM-DD
+    std::string base = "Exports/" + slug(title) + "_" + stamp;
+    bool ok = false;
+    std::string path;
+    if (fmt == 0)
+    {
+        path = base + ".csv";
+        ok = Export::csv(path, headers, rows);
+    }
+    else
+    {
+        path = base + ".html";
+        ok = Export::html(path, title, headers, rows);
+    }
+
+    if (!ok)
+    {
+        view.message("Could not write the export file.");
+        return;
+    }
+    logAction("exported table '" + title + "' -> " + path);
+    if (view.confirm("Saved to " + path + ".  Open it now?"))
+        Console::openFile(path);
+}
+
+void App::printInvoice(const std::string &invoiceId)
+{
+    int k = db.invoices.indexOf(invoiceId);
+    if (k < 0)
+        return;
+    Invoice &inv = db.invoices.at(k);
+
+    Export::InvoiceDoc doc;
+    doc.id = inv.id;
+    doc.date = inv.date;
+    doc.patientId = inv.patientId;
+    int pk = db.patients.indexOf(inv.patientId);
+    if (pk >= 0)
+    {
+        doc.patientName = db.patients.at(pk).name;
+        doc.patientContact = db.patients.at(pk).contact;
+    }
+    doc.sampleLocation = inv.sampleLocation;
+    doc.reference = inv.reference;
+    doc.discount = inv.discount;
+    doc.gross = inv.grossTotal;
+    doc.net = inv.netTotal;
+    long long paid = static_cast<long long>(invoicePaid(inv.id) + 0.5);
+    long long bal = static_cast<long long>(invoiceNet(inv.id) + 0.5) - paid;
+    doc.paid = to_string(paid);
+    doc.balance = to_string(bal > 0 ? bal : 0);
+    for (int i = 0; i < db.patientTests.count(); i++)
+    {
+        PatientTest &pt = db.patientTests.at(i);
+        if (pt.invoiceId == inv.id)
+            doc.tests.push_back({pt.testName, pt.specimen, pt.rate});
+    }
+
+    std::string path = "Exports/invoice_" + inv.id + ".html";
+    if (!Export::invoice(path, doc))
+    {
+        view.message("Could not write the invoice document.");
+        return;
+    }
+    logAction("generated invoice document " + inv.id);
+    if (view.confirm("Invoice saved to " + path + ".  Open / print now?"))
+        Console::openFile(path);
+}
+
+void App::printReceipt(const std::string &invoiceId, const std::string &paymentId)
+{
+    int k = db.payments.indexOf(paymentId);
+    if (k < 0)
+        return;
+    Payment &pay = db.payments.at(k);
+
+    Export::ReceiptDoc doc;
+    doc.id = pay.id;
+    doc.date = pay.date;
+    doc.invoiceId = invoiceId;
+    doc.amount = pay.amount;
+    long long paid = static_cast<long long>(invoicePaid(invoiceId) + 0.5);
+    long long bal = static_cast<long long>(invoiceNet(invoiceId) + 0.5) - paid;
+    doc.paidTotal = to_string(paid);
+    doc.balance = to_string(bal > 0 ? bal : 0);
+    int ik = db.invoices.indexOf(invoiceId);
+    if (ik >= 0)
+    {
+        int pk = db.patients.indexOf(db.invoices.at(ik).patientId);
+        if (pk >= 0)
+            doc.patientName = db.patients.at(pk).name;
+    }
+
+    std::string path = "Exports/receipt_" + pay.id + ".html";
+    if (!Export::receipt(path, doc))
+        return;
+    logAction("generated receipt " + pay.id);
+    if (view.confirm("Receipt saved to " + path + ".  Open / print now?"))
+        Console::openFile(path);
 }
 
 void App::patientRecords()
@@ -222,70 +386,69 @@ void App::patientRecords()
     logAction("opened Patient Records");
     while (true)
     {
-        db.patients.load();
+        db.loadAll(); // patients + invoices + tests + payments (for balances)
 
         std::vector<std::vector<std::string>> rows;
         for (int i = 0; i < db.patients.count(); i++)
         {
             Patient &p = db.patients.at(i);
-            rows.push_back({to_string(i + 1), p.id, p.name, p.contact,
-                            p.testCount, p.price, p.balance, p.status});
+            long long bal = static_cast<long long>(patientBalance(p.id) + 0.5);
+            rows.push_back({to_string(i + 1), p.id, p.name, p.contact, p.gender,
+                            p.age, to_string(bal)});
         }
 
-        // [Add New] = register; row [Edit] = manage that patient; [Delete] = remove.
-        RowAction a = view.entityTable(
-            "PATIENTS  (Edit a row to add tests / collect specimens)",
-            {"Sr", "ID", "Name", "Contact", "Tests", "Price", "Balance", "Status"}, rows);
+        // [Add New] = register a new patient; row [Edit] = manage (new visit /
+        // invoices); [Delete] = remove the patient and their billing records.
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Contact", "Gender", "Age", "Balance"};
+        RowAction a = view.entityTable("PATIENTS  (Edit = new visit / invoices)", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: registerPatient(); break;
         case RowAction::Edit: managePatient(a.index); break;
         case RowAction::Delete: deletePatient(a.index); break;
+        case RowAction::Export: exportTable("Patients", headers, rows); break;
         case RowAction::Back: return;
         }
     }
 }
 
-// Read-only aggregate view over all registered patients.
+// Read-only aggregate view over patients / tests / billing.
 void App::patientSummary()
 {
     logAction("opened Patient Summary");
-    db.patients.load();
+    db.loadAll();
 
-    int totalPatients = db.patients.count();
-    int totalTests = 0, collected = 0, pending = 0;
-    long long billed = 0, received = 0, balance = 0;
-    int registered = 0, sampled = 0;
-
-    for (int i = 0; i < totalPatients; i++)
+    int totalTests = db.patientTests.count();
+    int collected = 0, resulted = 0, pending = 0;
+    for (int i = 0; i < totalTests; i++)
     {
-        Patient &p = db.patients.at(i);
-        int n = p.testTotal();
-        totalTests += n;
-        for (int t = 0; t < n; t++)
-            (p.specimenTaken[t] == "Y") ? collected++ : pending++;
-        try { billed += std::stoll(p.price); } catch (...) {}
-        try { received += std::stoll(p.receivedAmount); } catch (...) {}
-        try { balance += std::stoll(p.balance); } catch (...) {}
-        if (p.status == "SAMPLED") sampled++;
-        else registered++;
+        PatientTest &pt = db.patientTests.at(i);
+        (pt.specimenTaken == "Y") ? collected++ : pending++;
+        if (pt.status == "DONE") resulted++;
     }
 
+    long long net = 0, paid = 0;
+    for (int i = 0; i < db.invoices.count(); i++)
+        net += static_cast<long long>(invoiceNet(db.invoices.at(i).id) + 0.5);
+    for (int i = 0; i < db.payments.count(); i++)
+        try { paid += std::stoll(db.payments.at(i).amount); } catch (...) {}
+    long long balance = net - paid;
+
     vector<vector<string>> rows = {
-        {"Total patients", to_string(totalPatients)},
-        {"Tests ordered", to_string(totalTests)},
+        {"Total patients", to_string(db.patients.count())},
+        {"Total invoices (visits)", to_string(db.invoices.count())},
+        {"Total tests ordered", to_string(totalTests)},
         {"Specimens collected", to_string(collected)},
         {"Specimens pending", to_string(pending)},
-        {"Status: REGISTERED", to_string(registered)},
-        {"Status: SAMPLED", to_string(sampled)},
-        {"Total billed", to_string(billed)},
-        {"Total received", to_string(received)},
-        {"Total balance due", to_string(balance)},
+        {"Results entered", to_string(resulted)},
+        {"Total billed (net)", to_string(net)},
+        {"Total received", to_string(paid)},
+        {"Total outstanding", to_string(balance > 0 ? balance : 0)},
     };
 
     view.clear();
     view.table("PATIENT SUMMARY", {"Metric", "Value"}, rows);
-    view.message("Summary of " + to_string(totalPatients) + " registered patient(s).");
+    view.message("Summary across " + to_string(db.patients.count()) + " patient(s).");
 }
 
 void App::registerPatient()
@@ -297,29 +460,45 @@ void App::registerPatient()
         return;
     }
 
-    // 1) Basic details.
-    auto v = view.form("ADD NEW PATIENT",
+    auto v = view.form("REGISTER NEW PATIENT",
                        {"Patient Name", "CNIC", "Phone No.", "Gender (M/F/O)",
                         "Age", "Blood Group", "Address"});
     Patient p;
-    p.name = v[0];
-    p.cnic = v[1];
-    p.contact = v[2];
-    p.gender = v[3];
-    p.age = v[4];
-    p.bloodGroup = v[5];
-    p.address = v[6];
+    p.id = db.patients.nextId();
+    p.name = v[0]; p.cnic = v[1]; p.contact = v[2]; p.gender = v[3];
+    p.age = v[4]; p.bloodGroup = v[5]; p.address = v[6];
     p.regDate = Console::date();
+    db.patients.add(p);
+    db.patients.store();
+    logAction("registered patient " + p.id + " (" + p.name + ")");
 
-    // 2) Sample location.
-    int locIdx = view.select("Sample Location",
-                             {"LAB", "Home", "Collection Center", "Hospital", "Doctor"});
+    // First visit / invoice.
+    std::string inv = orderTests(p.id);
+    if (inv.empty())
+        view.message("Patient " + p.id + " saved (no tests ordered yet).");
+}
+
+// Creates one invoice (its PatientTest rows + an opening payment) for an
+// existing patient. Returns the new invoice id, or "" if nothing was ordered.
+std::string App::orderTests(const std::string &patientId)
+{
+    if (db.labTests.count() == 0 && db.packages.count() == 0)
+    {
+        view.message("No lab tests or packages exist yet. Add some first.");
+        return "";
+    }
+
+    Invoice inv;
+    inv.id = db.invoices.nextId();
+    inv.patientId = patientId;
+    inv.date = Console::date();
+
     std::vector<std::string> locations = {"LAB", "Home", "Collection Center", "Hospital", "Doctor"};
-    p.sampleLocation = (locIdx >= 0) ? locations[locIdx] : "LAB";
+    int locIdx = view.select("Sample Location", locations);
+    inv.sampleLocation = (locIdx >= 0) ? locations[locIdx] : "LAB";
 
-    // 3) Reference (company / doctor) or self.
-    p.reference = "SELF";
-    p.discount = "0";
+    inv.reference = "SELF";
+    std::string discount = "0";
     if (view.confirm("Is this a reference patient (company/doctor)?"))
     {
         if (db.companies.count() > 0)
@@ -327,315 +506,420 @@ void App::registerPatient()
             int ci = view.select("Select Reference", db.companies.names());
             if (ci >= 0)
             {
-                p.reference = db.companies.at(ci).name;
-                p.discount = db.companies.at(ci).discount;
+                inv.reference = db.companies.at(ci).name;
+                discount = db.companies.at(ci).discount;
             }
         }
         else
-            view.message("No company/doctor records found - registering as SELF.");
+            view.message("No company records - ordering as SELF.");
     }
 
-    // 4) Tests (package or individual). Bails out if nothing exists to add.
-    double price = 0;
-    if (!choosePatientTests(p, price))
+    double gross = 0;
+    if (!chooseTests(inv.id, patientId, gross, discount))
     {
-        view.message("No packages or lab tests exist yet. Add some first.");
-        return;
+        view.message("No tests ordered.");
+        return "";
     }
 
-    // 5) Apply reference discount to individually-priced tests.
-    if (p.reference != "SELF")
-    {
-        double disc = 0;
-        try { disc = std::stod(p.discount); } catch (...) { disc = 0; }
-        price = price - (disc * price / 100.0);
-    }
+    double discPct = 0;
+    try { discPct = std::stod(discount); } catch (...) {}
+    double net = gross - (discPct * gross / 100.0);
 
-    // 6) Billing.
+    inv.discount = discount;
+    inv.grossTotal = to_string(static_cast<long long>(gross + 0.5));
+    inv.netTotal = to_string(static_cast<long long>(net + 0.5));
+    db.invoices.add(inv);
+    db.invoices.store();
+    logAction("created invoice " + inv.id + " for patient " + patientId);
+
+    // Opening payment.
     view.clear();
-    view.message("Bill total for this patient: " + to_string(static_cast<int>(price + 0.5)));
-    std::string recvStr = view.ask("Amount received");
-    int received = 0;
-    try { received = std::stoi(recvStr); } catch (...) { received = 0; }
-    int balance = static_cast<int>(price + 0.5) - received;
-
-    // 7) Finalise + persist.
-    p.id = db.patients.nextId();
-    p.price = to_string(static_cast<int>(price + 0.5));
-    p.receivedAmount = to_string(received);
-    p.balance = to_string(balance > 0 ? balance : 0);
-    p.status = "REGISTERED";
-    int n = p.testTotal();
-    for (int i = 0; i < n; i++)
+    view.message("Invoice " + inv.id + ":  net " + inv.netTotal + " (gross " +
+                 inv.grossTotal + ", discount " + discount + "%)");
+    std::string recv = view.ask("Amount received now");
+    long long amount = 0;
+    try { amount = std::stoll(recv); } catch (...) { amount = 0; }
+    std::string payId;
+    if (amount > 0)
     {
-        p.testStatus[i] = "PEND";    // result pending
-        p.specimenTaken[i] = "N";    // specimen not collected yet (do it now or later)
+        Payment pay;
+        pay.id = db.payments.nextId();
+        pay.invoiceId = inv.id;
+        pay.amount = to_string(amount);
+        pay.date = Console::date();
+        db.payments.add(pay);
+        db.payments.store();
+        payId = pay.id;
+        logAction("payment " + pay.id + " of " + pay.amount + " on invoice " + inv.id);
     }
 
-    db.patients.add(p);
-    db.patients.store();
-    logAction("registered patient " + p.id + " (" + p.name + ")");
+    long long balance = static_cast<long long>(net + 0.5) - amount;
+    view.message("Invoice " + inv.id + " created. Paid " + to_string(amount) +
+                 ", balance " + to_string(balance > 0 ? balance : 0) + ".");
 
-    std::string note = "Patient registered: " + p.id + ".  ";
-    note += (balance > 0) ? ("Balance due: " + to_string(balance))
-                          : ("Returnable: " + to_string(-balance));
-    view.message(note);
+    // Generate the printable invoice (and a receipt for the opening payment).
+    printInvoice(inv.id);
+    if (!payId.empty())
+        printReceipt(inv.id, payId);
+    return inv.id;
 }
 
-// Returns false only when there is nothing in the system to register at all.
-bool App::choosePatientTests(Patient &p, double &price)
+// Adds PatientTest rows for a package or individually-picked tests, summing the
+// gross. A package also sets `discount`. Returns false if nothing was added.
+bool App::chooseTests(const std::string &invoiceId, const std::string &patientId,
+                      double &gross, std::string &discount)
 {
-    price = 0;
+    gross = 0;
+    int added = 0;
 
-    bool wantPackage = view.confirm("Attach a package?");
-    if (wantPackage && db.packages.count() > 0)
+    auto addTest = [&](int k)
+    {
+        LabTest &lt = db.labTests.at(k);
+        PatientTest pt;
+        pt.id = db.patientTests.nextId();
+        pt.invoiceId = invoiceId;
+        pt.patientId = patientId;
+        pt.testId = lt.id;
+        pt.testName = lt.name;
+        pt.specimen = lt.specimen;
+        pt.rate = lt.rate;
+        pt.specimenTaken = "N";
+        pt.status = "PEND";
+        db.patientTests.add(pt);
+        try { gross += std::stod(lt.rate); } catch (...) {}
+        added++;
+    };
+
+    if (view.confirm("Attach a package?") && db.packages.count() > 0)
     {
         int pi = view.select("Select Package", db.packages.names());
         if (pi >= 0)
         {
             Package &pack = db.packages.at(pi);
-            p.testCount = pack.testCount;
-            int n = p.testTotal();
-            for (int i = 0; i < n && i < (int)pack.tests.size(); i++)
-                p.tests[i] = pack.tests[i];
-            try { price = std::stod(pack.rate); } catch (...) { price = 0; }
-            p.discount = pack.disc;
-            return true;
+            discount = pack.disc; // package discount overrides the reference one
+            for (const string &tid : pack.tests)
+            {
+                if (tid.empty()) continue;
+                int k = db.labTests.indexOf(tid);
+                if (k >= 0) addTest(k);
+            }
         }
     }
 
-    // Individual tests.
-    if (db.labTests.count() == 0)
-        return false;
-
-    std::string numStr = view.ask("How many tests to add");
-    int num = 0;
-    try { num = std::stoi(numStr); } catch (...) { num = 0; }
-    if (num < 1) num = 1;
-    if (num > 20) num = 20;
-
-    // Build a readable "ID - Name" picker list once.
-    std::vector<std::string> options;
-    for (int i = 0; i < db.labTests.count(); i++)
-        options.push_back(db.labTests.at(i).id + " - " + db.labTests.at(i).name);
-
-    int added = 0;
-    for (int a = 0; a < num; a++)
+    if (added == 0) // individual tests
     {
-        int ti = view.select("Select test " + to_string(a + 1), options);
-        if (ti < 0)
-            break;
-        p.tests[added] = db.labTests.at(ti).id;
-        try { price += std::stod(db.labTests.at(ti).rate); } catch (...) {}
-        added++;
+        if (db.labTests.count() == 0)
+            return false;
+        std::string numStr = view.ask("How many tests to add");
+        int num = 0;
+        try { num = std::stoi(numStr); } catch (...) { num = 0; }
+        if (num < 1) num = 1;
+        if (num > 20) num = 20;
+
+        std::vector<std::string> options;
+        for (int k = 0; k < db.labTests.count(); k++)
+            options.push_back(db.labTests.at(k).id + " - " + db.labTests.at(k).name);
+
+        for (int a = 0; a < num; a++)
+        {
+            int ti = view.select("Select test " + to_string(a + 1), options);
+            if (ti < 0) break;
+            addTest(ti);
+        }
     }
-    p.testCount = to_string(added);
+
+    if (added == 0)
+        return false;
+    db.patientTests.store();
     return true;
 }
 
 // ---------------------------------------------------------------------------
-// Manage an already-registered patient: view their tests, add a new test, or
-// collect a specimen (now or later) for each test.
+// Manage a patient: order another visit, or browse invoices & payments.
 // ---------------------------------------------------------------------------
 void App::managePatient(int i)
 {
     if (i < 0 || i >= db.patients.count())
         return;
-
+    std::string pid = db.patients.at(i).id;
+    std::string pname = db.patients.at(i).name;
     while (true)
     {
-        Patient &p = db.patients.at(i);
-        int n = p.testTotal();
-
-        vector<vector<string>> rows;
-        for (int t = 0; t < n; t++)
-        {
-            string tid = p.tests[t], tname = "?", spec = "?";
-            int k = db.labTests.indexOf(tid);
-            if (k >= 0)
-            {
-                tname = db.labTests.at(k).name;
-                spec = db.labTests.at(k).specimen;
-            }
-            string taken = (p.specimenTaken[t] == "Y") ? "YES" : "no";
-            rows.push_back({to_string(t + 1), tid, tname, spec, taken, p.testStatus[t]});
-        }
-
         view.clear();
-        view.table("PATIENT " + p.id + " - " + p.name + "   (Price " + p.price +
-                       ", Balance " + p.balance + ")",
-                   {"Sr", "Test", "Name", "Specimen", "Specimen Taken", "Result"}, rows);
-
-        int c = view.menu("Patient actions",
-                          {"Add Test", "Collect Specimen", "Back"});
+        int c = view.menu("PATIENT " + pid + " - " + pname,
+                          {"New Visit (order tests)", "Invoices & Payments", "Back"});
         if (c == 0)
-            addTestToPatient(i);
+            orderTests(pid);
         else if (c == 1)
-            collectSpecimen(i);
+            patientInvoices(pid);
         else
             return;
     }
 }
 
-void App::addTestToPatient(int i)
+void App::patientInvoices(const std::string &patientId)
 {
-    view.clear();
-    Patient &p = db.patients.at(i);
+    while (true)
+    {
+        db.invoices.load();
+        db.payments.load();
+        db.patientTests.load();
 
-    if (db.labTests.count() == 0)
-    {
-        view.message("No lab tests defined yet.");
-        return;
-    }
-    int n = p.testTotal();
-    if (n >= 20)
-    {
-        view.message("This patient already has the maximum of 20 tests.");
-        return;
-    }
-
-    // Offer only tests the patient does not already have.
-    vector<string> opts;
-    vector<int> mapIdx;
-    for (int k = 0; k < db.labTests.count(); k++)
-    {
-        bool have = false;
-        for (int t = 0; t < n; t++)
-            if (p.tests[t] == db.labTests.at(k).id)
-                have = true;
-        if (!have)
+        std::vector<std::vector<std::string>> rows;
+        std::vector<std::string> ids;
+        for (int i = 0; i < db.invoices.count(); i++)
         {
-            opts.push_back(db.labTests.at(k).id + " - " + db.labTests.at(k).name);
-            mapIdx.push_back(k);
+            Invoice &inv = db.invoices.at(i);
+            if (inv.patientId != patientId) continue;
+            long long paid = static_cast<long long>(invoicePaid(inv.id) + 0.5);
+            long long bal = static_cast<long long>(invoiceNet(inv.id) + 0.5) - paid;
+            ids.push_back(inv.id);
+            rows.push_back({to_string((int)ids.size()), inv.id, inv.date, inv.netTotal,
+                            to_string(paid), to_string(bal > 0 ? bal : 0)});
         }
-    }
-    if (opts.empty())
-    {
-        view.message("All available tests are already added to this patient.");
-        return;
-    }
 
-    int sel = view.select("Select a test to add", opts);
-    if (sel < 0)
-        return;
-    LabTest &lt = db.labTests.at(mapIdx[sel]);
-
-    // Append the test and re-bill.
-    p.tests[n] = lt.id;
-    p.testStatus[n] = "PEND";
-    p.specimenTaken[n] = "N"; // collect its specimen now or later
-    p.testCount = to_string(n + 1);
-
-    double price = 0, rate = 0;
-    try { price = std::stod(p.price); } catch (...) {}
-    try { rate = std::stod(lt.rate); } catch (...) {}
-    price += rate;
-    p.price = to_string(static_cast<int>(price + 0.5));
-
-    int received = 0;
-    try { received = std::stoi(p.receivedAmount); } catch (...) {}
-    int balance = static_cast<int>(price + 0.5) - received;
-    p.balance = to_string(balance > 0 ? balance : 0);
-    if (p.status == "SAMPLED")
-        p.status = "REGISTERED"; // a freshly added test still needs its specimen
-
-    db.patients.update(i);
-    logAction("added test " + lt.id + " to patient " + p.id);
-    view.message("Added test " + lt.id + " (" + lt.name + ").  New price " +
-                 p.price + ", balance " + p.balance + ".");
-}
-
-void App::collectSpecimen(int i)
-{
-    view.clear();
-    Patient &p = db.patients.at(i);
-    int n = p.testTotal();
-    if (n == 0)
-    {
-        view.message("This patient has no tests.");
-        return;
-    }
-
-    // Pick which test's specimen to collect.
-    vector<string> opts;
-    for (int t = 0; t < n; t++)
-    {
-        string spec = "?";
-        int k = db.labTests.indexOf(p.tests[t]);
-        if (k >= 0)
-            spec = db.labTests.at(k).specimen;
-        string st = (p.specimenTaken[t] == "Y") ? "[COLLECTED]" : "[pending]";
-        opts.push_back(p.tests[t] + "   specimen: " + spec + "   " + st);
-    }
-    int sel = view.select("Pick a test to collect its specimen", opts);
-    if (sel < 0)
-        return;
-    if (p.specimenTaken[sel] == "Y")
-    {
-        view.message("Specimen already collected for this test.");
-        return;
-    }
-
-    if (!view.confirm("Has the specimen been collected for this test?"))
-    {
-        view.message("No change - you can collect it later.");
-        return;
-    }
-
-    // Show the SOP checklist for this specimen and require the technician to
-    // confirm they followed it before marking the specimen as collected.
-    string spec = "";
-    int k = db.labTests.indexOf(p.tests[sel]);
-    if (k >= 0)
-        spec = db.labTests.at(k).specimen;
-
-    db.sops.load();
-    vector<vector<string>> sopRows;
-    for (int q = 0; q < db.sops.count(); q++)
-        if (db.sops.at(q).specimen == spec)
-            sopRows.push_back({db.sops.at(q).id, db.sops.at(q).sop});
-
-    view.clear();
-    if (sopRows.empty())
-    {
-        view.message("No SOPs defined for specimen '" + spec + "'. Marking as collected.");
-    }
-    else
-    {
-        view.table("SOPs to follow for specimen '" + spec + "'", {"ID", "Procedure"}, sopRows);
-        if (!view.confirm("Did you follow ALL of the above SOPs?"))
+        view.clear();
+        view.table("INVOICES for " + patientId,
+                   {"Sr", "Invoice", "Date", "Net", "Paid", "Balance"}, rows);
+        if (ids.empty())
         {
-            view.message("Specimen NOT marked - please follow the SOPs first.");
+            view.message("No invoices yet for this patient.");
             return;
         }
+        std::vector<std::string> opts = ids;
+        opts.push_back("<< Back");
+        int sel = view.select("Open an invoice", opts);
+        if (sel < 0 || sel >= (int)ids.size())
+            return;
+        invoiceDetail(ids[sel]);
     }
-
-    p.specimenTaken[sel] = "Y";
-    bool allDone = true;
-    for (int t = 0; t < n; t++)
-        if (p.specimenTaken[t] != "Y")
-            allDone = false;
-    if (allDone)
-        p.status = "SAMPLED";
-
-    db.patients.update(i);
-    logAction("collected specimen '" + spec + "' for test " + p.tests[sel] +
-              " of patient " + p.id);
-    view.message("Specimen collected for " + p.tests[sel] + ".");
 }
 
+void App::invoiceDetail(const std::string &invoiceId)
+{
+    while (true)
+    {
+        db.patientTests.load();
+        db.payments.load();
+        db.invoices.load();
+
+        std::vector<std::vector<std::string>> rows;
+        for (int i = 0; i < db.patientTests.count(); i++)
+        {
+            PatientTest &pt = db.patientTests.at(i);
+            if (pt.invoiceId != invoiceId) continue;
+            std::string taken = (pt.specimenTaken == "Y") ? "YES" : "no";
+            rows.push_back({pt.testId, pt.testName, pt.specimen, pt.rate, taken, pt.status, pt.result});
+        }
+
+        long long net = static_cast<long long>(invoiceNet(invoiceId) + 0.5);
+        long long paid = static_cast<long long>(invoicePaid(invoiceId) + 0.5);
+        long long bal = net - paid;
+
+        view.clear();
+        view.table("INVOICE " + invoiceId + "   Net " + to_string(net) + "  Paid " +
+                       to_string(paid) + "  Balance " + to_string(bal > 0 ? bal : 0),
+                   {"Test", "Name", "Specimen", "Rate", "Taken", "Status", "Result"}, rows);
+
+        int c = view.menu("Invoice actions", {"Add Payment", "Print Invoice", "Back"});
+        if (c == 0)
+            addPayment(invoiceId);
+        else if (c == 1)
+            printInvoice(invoiceId);
+        else
+            return;
+    }
+}
+
+void App::addPayment(const std::string &invoiceId)
+{
+    view.clear();
+    long long bal = static_cast<long long>((invoiceNet(invoiceId) - invoicePaid(invoiceId)) + 0.5);
+    if (bal <= 0)
+    {
+        view.message("This invoice is already fully paid.");
+        return;
+    }
+    view.message("Outstanding balance: " + to_string(bal));
+    std::string recv = view.ask("Payment amount");
+    long long amount = 0;
+    try { amount = std::stoll(recv); } catch (...) { amount = 0; }
+    if (amount <= 0)
+    {
+        view.message("No payment recorded.");
+        return;
+    }
+    Payment pay;
+    pay.id = db.payments.nextId();
+    pay.invoiceId = invoiceId;
+    pay.amount = to_string(amount);
+    pay.date = Console::date();
+    db.payments.add(pay);
+    db.payments.store();
+    logAction("payment " + pay.id + " of " + pay.amount + " on invoice " + invoiceId);
+    long long newBal = bal - amount;
+    view.message("Payment recorded. New balance: " + to_string(newBal > 0 ? newBal : 0));
+    printReceipt(invoiceId, pay.id);
+}
+
+// ---------------------------------------------------------------------------
+// Sample Receiving: collect specimens for any pending PatientTest (across all
+// patients). Collecting shows that specimen's SOP checklist.
+// ---------------------------------------------------------------------------
+void App::sampleReceiving()
+{
+    logAction("opened Sample Receiving");
+    while (true)
+    {
+        db.patientTests.load();
+        db.patients.load();
+        db.sops.load();
+
+        std::vector<int> idx;
+        std::vector<std::string> opts;
+        for (int i = 0; i < db.patientTests.count(); i++)
+        {
+            PatientTest &pt = db.patientTests.at(i);
+            if (pt.specimenTaken == "Y") continue; // only pending
+            std::string pname = "?";
+            int pk = db.patients.indexOf(pt.patientId);
+            if (pk >= 0) pname = db.patients.at(pk).name;
+            opts.push_back(pt.patientId + " " + pname + "  |  " + pt.testName +
+                           "  |  specimen: " + pt.specimen);
+            idx.push_back(i);
+        }
+
+        view.clear();
+        if (opts.empty())
+        {
+            view.message("No specimens pending collection.");
+            return;
+        }
+        opts.push_back("<< Back");
+        int sel = view.select("SAMPLE RECEIVING - pick a test to collect its specimen", opts);
+        if (sel < 0 || sel >= (int)idx.size())
+            return;
+
+        int i = idx[sel];
+        PatientTest &pt = db.patientTests.at(i);
+
+        std::vector<std::vector<std::string>> sopRows;
+        for (int q = 0; q < db.sops.count(); q++)
+            if (db.sops.at(q).specimen == pt.specimen)
+                sopRows.push_back({db.sops.at(q).id, db.sops.at(q).sop});
+
+        view.clear();
+        if (sopRows.empty())
+        {
+            if (!view.confirm("No SOPs for specimen '" + pt.specimen + "'. Mark it collected?"))
+                continue;
+        }
+        else
+        {
+            view.table("SOPs for specimen '" + pt.specimen + "'", {"ID", "Procedure"}, sopRows);
+            if (!view.confirm("Did you follow ALL SOPs and collect the specimen?"))
+                continue;
+        }
+
+        pt.specimenTaken = "Y";
+        db.patientTests.update(i);
+        logAction("collected specimen for test " + pt.id + " (" + pt.testName +
+                  ") patient " + pt.patientId);
+        view.message("Specimen collected for " + pt.testName + ".");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Result Entry: for tests whose specimen is collected but result is pending,
+// record the result and mark the test DONE.
+// ---------------------------------------------------------------------------
+void App::resultEntry()
+{
+    logAction("opened Result Entry");
+    while (true)
+    {
+        db.patientTests.load();
+        db.patients.load();
+
+        std::vector<int> idx;
+        std::vector<std::string> opts;
+        for (int i = 0; i < db.patientTests.count(); i++)
+        {
+            PatientTest &pt = db.patientTests.at(i);
+            if (pt.specimenTaken != "Y") continue; // specimen must be collected
+            if (pt.status == "DONE") continue;      // result not yet entered
+            std::string pname = "?";
+            int pk = db.patients.indexOf(pt.patientId);
+            if (pk >= 0) pname = db.patients.at(pk).name;
+            opts.push_back(pt.patientId + " " + pname + "  |  " + pt.testName +
+                           "  |  " + pt.specimen);
+            idx.push_back(i);
+        }
+
+        view.clear();
+        if (opts.empty())
+        {
+            view.message("No tests awaiting results (collect specimens first).");
+            return;
+        }
+        opts.push_back("<< Back");
+        int sel = view.select("RESULT ENTRY - pick a test", opts);
+        if (sel < 0 || sel >= (int)idx.size())
+            return;
+
+        int i = idx[sel];
+        PatientTest &pt = db.patientTests.at(i);
+        auto v = view.form("Enter result for " + pt.testName + " (" + pt.testId + ")", {"Result"});
+        std::string res = v[0];
+        for (char &ch : res)
+            if (ch == ',') ch = ';'; // keep the CSV row intact
+        pt.result = res;
+        pt.status = "DONE";
+        db.patientTests.update(i);
+        logAction("entered result for test " + pt.id + " (" + pt.testName +
+                  ") patient " + pt.patientId);
+        view.message("Result saved for " + pt.testName + ".");
+    }
+}
+
+// Deletes a patient and cascades to their invoices, tests and payments.
 void App::deletePatient(int i)
 {
     if (i < 0 || i >= db.patients.count())
         return;
     view.clear();
-    string id = db.patients.at(i).id;
-    if (!view.confirm("Delete patient " + id + "?"))
+    std::string id = db.patients.at(i).id;
+    if (!view.confirm("Delete patient " + id + " and ALL their invoices/tests/payments?"))
         return;
+
+    std::vector<std::string> invIds;
+    for (int k = 0; k < db.invoices.count(); k++)
+        if (db.invoices.at(k).patientId == id)
+            invIds.push_back(db.invoices.at(k).id);
+    auto belongs = [&](const std::string &iv)
+    {
+        for (const std::string &x : invIds)
+            if (x == iv) return true;
+        return false;
+    };
+
+    for (int k = db.patientTests.count() - 1; k >= 0; k--)
+        if (db.patientTests.at(k).patientId == id)
+            db.patientTests.removeAt(k);
+    for (int k = db.payments.count() - 1; k >= 0; k--)
+        if (belongs(db.payments.at(k).invoiceId))
+            db.payments.removeAt(k);
+    for (int k = db.invoices.count() - 1; k >= 0; k--)
+        if (db.invoices.at(k).patientId == id)
+            db.invoices.removeAt(k);
     db.patients.removeAt(i);
+
     db.patients.store();
-    logAction("deleted patient " + id);
-    view.message("Patient deleted.");
+    db.invoices.store();
+    db.patientTests.store();
+    db.payments.store();
+    logAction("deleted patient " + id + " (cascade)");
+    view.message("Patient and related records deleted.");
 }
 
 // ---------------------------------------------------------------------------
@@ -655,12 +939,14 @@ void App::specimenModule()
             rows.push_back({to_string(i + 1), s.id, s.name, s.description});
         }
 
-        RowAction a = view.entityTable("SPECIMENS", {"Sr", "ID", "Name", "Description"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Description"};
+        RowAction a = view.entityTable("SPECIMENS", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addSpecimen(); break;
         case RowAction::Edit: editSpecimen(a.index); break;
         case RowAction::Delete: deleteSpecimen(a.index); break;
+        case RowAction::Export: exportTable("Specimens", headers, rows); break;
         case RowAction::Back: return;
         }
     }
@@ -734,12 +1020,14 @@ void App::labDepartmentModule()
             rows.push_back({to_string(i + 1), d.id, d.name, d.date});
         }
 
-        RowAction a = view.entityTable("LAB DEPARTMENTS", {"Sr", "ID", "Name", "Date"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Date"};
+        RowAction a = view.entityTable("LAB DEPARTMENTS", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addLabDepartment(); break;
         case RowAction::Edit: editLabDepartment(a.index); break;
         case RowAction::Delete: deleteLabDepartment(a.index); break;
+        case RowAction::Export: exportTable("Lab Departments", headers, rows); break;
         case RowAction::Back: return;
         }
     }
@@ -810,13 +1098,14 @@ void App::labTestModule()
             rows.push_back({to_string(i + 1), t.id, t.name, t.rate, t.group, t.specimen});
         }
 
-        RowAction a = view.entityTable("LAB TESTS",
-                                       {"Sr", "ID", "Name", "Rate", "Dept", "Specimen"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Rate", "Dept", "Specimen"};
+        RowAction a = view.entityTable("LAB TESTS", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addLabTest(); break;
         case RowAction::Edit: editLabTest(a.index); break;
         case RowAction::Delete: deleteLabTest(a.index); break;
+        case RowAction::Export: exportTable("Lab Tests", headers, rows); break;
         case RowAction::Back: return;
         }
     }
@@ -933,13 +1222,14 @@ void App::machineModule()
             rows.push_back({to_string(i + 1), m.id, m.name, m.description, m.quantity});
         }
 
-        RowAction a = view.entityTable("MACHINES",
-                                       {"Sr", "ID", "Name", "Description", "Qty"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Description", "Qty"};
+        RowAction a = view.entityTable("MACHINES", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addMachine(); break;
         case RowAction::Edit: editMachine(a.index); break;
         case RowAction::Delete: deleteMachine(a.index); break;
+        case RowAction::Export: exportTable("Machines", headers, rows); break;
         case RowAction::Back: return;
         }
     }
@@ -1014,13 +1304,14 @@ void App::packageModule()
                             p.rate, p.disc + "%"});
         }
 
-        RowAction a = view.entityTable("PACKAGES",
-                                       {"Sr", "ID", "Name", "Tests", "Rate", "Disc"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Tests", "Rate", "Disc"};
+        RowAction a = view.entityTable("PACKAGES", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addPackage(); break;
         case RowAction::Edit: editPackage(a.index); break;
         case RowAction::Delete: deletePackage(a.index); break;
+        case RowAction::Export: exportTable("Packages", headers, rows); break;
         case RowAction::Back: return;
         }
     }
@@ -1172,13 +1463,14 @@ void App::sopModule()
             rows.push_back({to_string(i + 1), s.id, s.specimen, s.sop, s.date});
         }
 
-        RowAction a = view.entityTable("SOPs (per specimen)",
-                                       {"Sr", "ID", "Specimen", "SOP", "Date"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Specimen", "SOP", "Date"};
+        RowAction a = view.entityTable("SOPs (per specimen)", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addSop(); break;
         case RowAction::Edit: editSop(a.index); break;
         case RowAction::Delete: deleteSop(a.index); break;
+        case RowAction::Export: exportTable("SOPs", headers, rows); break;
         case RowAction::Back: return;
         }
     }
@@ -1271,13 +1563,14 @@ void App::companyModule()
                             c.discount + "%", c.commisionPerc + "%"});
         }
 
-        RowAction a = view.entityTable("CORPORATE (Companies & Doctors)",
-                                       {"Sr", "ID", "Name", "Type", "Contact", "Disc", "Comm"}, rows);
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Type", "Contact", "Disc", "Comm"};
+        RowAction a = view.entityTable("CORPORATE (Companies & Doctors)", headers, rows);
         switch (a.type)
         {
         case RowAction::Add: addCompany(); break;
         case RowAction::Edit: editCompany(a.index); break;
         case RowAction::Delete: deleteCompany(a.index); break;
+        case RowAction::Export: exportTable("Corporate", headers, rows); break;
         case RowAction::Back: return;
         }
     }

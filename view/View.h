@@ -33,6 +33,7 @@ struct RowAction
         Add,
         Edit,
         Delete,
+        Export, // export the whole table (toolbar)
         Back
     } type;
     int index; // selected record index (valid for Edit/Delete)

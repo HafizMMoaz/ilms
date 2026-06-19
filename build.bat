@@ -4,7 +4,7 @@ setlocal
 
 set INCLUDES=-Imodel -Iview -Icontroller
 set SOURCES=main.cpp ^
-    model\Utils.cpp model\Session.cpp model\Validator.cpp model\Database.cpp model\Backup.cpp model\Logger.cpp ^
+    model\Utils.cpp model\Session.cpp model\Validator.cpp model\Database.cpp model\Backup.cpp model\Logger.cpp model\Export.cpp ^
     view\Console.cpp view\ConsoleView.cpp ^
     controller\App.cpp
 

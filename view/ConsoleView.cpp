@@ -593,7 +593,8 @@ RowAction ConsoleView::entityTable(const string &title, const vector<string> &he
 
         blank(toolbarY);
         button(LEFT, toolbarY, "Add New", focusRow == -1 && focusCol == 0);
-        button(LEFT + 14, toolbarY, "Back", focusRow == -1 && focusCol == 1);
+        button(LEFT + 14, toolbarY, "Export", focusRow == -1 && focusCol == 1);
+        button(LEFT + 26, toolbarY, "Back", focusRow == -1 && focusCol == 2);
 
         for (int s = 0; s < PAGE_SIZE; s++)
         {
@@ -629,10 +630,11 @@ RowAction ConsoleView::entityTable(const string &title, const vector<string> &he
             ch = _getch();
             if (ch == 72 && focusRow > -1)         focusRow--;                 // up
             else if (ch == 80 && focusRow < pageRows - 1) focusRow++;          // down
-            else if (ch == 75)                     focusCol = 0;               // left
-            else if (ch == 77)                     focusCol = 1;               // right
+            else if (ch == 75)                     { if (focusCol > 0) focusCol--; }            // left
+            else if (ch == 77)                     { int mx = (focusRow == -1) ? 2 : 1; if (focusCol < mx) focusCol++; } // right
             else if (ch == 73 && page > 0)         { page--; focusRow = -1; }  // PageUp
             else if (ch == 81 && page < totalPages - 1) { page++; focusRow = -1; } // PageDown
+            if (focusRow >= 0 && focusCol > 1) focusCol = 1; // rows have only 2 buttons
             render();
         }
         else if (ch == '\r' || ch == '\n')
@@ -640,7 +642,9 @@ RowAction ConsoleView::entityTable(const string &title, const vector<string> &he
             RowAction a;
             if (focusRow == -1)
             {
-                a.type = (focusCol == 0) ? RowAction::Add : RowAction::Back;
+                a.type = (focusCol == 0) ? RowAction::Add
+                         : (focusCol == 1) ? RowAction::Export
+                                           : RowAction::Back;
                 a.index = -1;
             }
             else

@@ -97,21 +97,25 @@ a real table with a search box and pager.
   * **SOPs** — each SOP belongs to a **specimen** (the checklist for collecting
     it; a specimen can have many). Add picks the specimen first; persists to
     `DataBase/sops.txt`.
-* **PATIENT** (interactive table): **[Add New]** registers a patient (details,
-  sample location, reference company, package *or* individual tests, bill /
-  balance); a row's **[Edit]** opens *manage patient*; **[Delete]** removes.
-  Persists to `DataBase/patient.txt`.
-  * **Manage patient** shows every test with its specimen, whether the specimen
-    is collected, and the result status. From here you can:
-    * **Add Test** — append a new lab test to an existing patient and re-bill
-      (price + balance updated).
-    * **Collect Specimen** — for any test whose specimen wasn't taken at
-      registration, mark it collected later. Collecting shows the **SOP
-      checklist** for that specimen (`sop.specimen == LabTest.specimen`) and
-      requires the technician to confirm they followed it. When every specimen
-      is collected the patient status becomes `SAMPLED`.
-  * **Patient Summary** — read-only aggregates (totals, specimens
-    collected/pending, status counts, billed/received/balance).
+* **PATIENT** — a small **relational** model instead of everything inline:
+  * `Patient` (demographics) — `patient.txt`
+  * `Invoice` (one per visit: sample location, reference, discount, gross/net) — `invoice.txt`
+  * `PatientTest` (one row per ordered test: specimen, rate, collected Y/N,
+    status PEND/DONE, result) — `patienttest.txt`
+  * `Payment` (money against an invoice) — `payment.txt`; **balance = invoice net
+    − Σ payments**
+  * **Patient Records** (interactive table, shows outstanding balance):
+    **[Add New]** registers a patient + first visit; **[Edit]** = manage
+    (New Visit → another invoice + tests + opening payment; or Invoices &
+    Payments → per-invoice tests/results + **Add Payment**); **[Delete]**
+    cascades to the patient's invoices/tests/payments.
+  * **Sample Receiving** — collect specimens for any pending test across all
+    patients; shows that specimen's **SOP checklist** (`sop.specimen ==
+    PatientTest.specimen`) and requires confirmation.
+  * **Result Entry** — for tests whose specimen is collected, record the result
+    and mark the test `DONE`.
+  * **Patient Summary** — aggregates (patients, visits, tests, specimens
+    collected/pending, results entered, billed/received/outstanding).
 * **SETUP → Corporate** — referring companies/hospitals/doctors (name, type,
   contact, discount %, commission %); Add / Edit / Delete.
 * **SETUP → Test Rate List** — read-only price list of all lab tests.
@@ -120,8 +124,16 @@ a real table with a search box and pager.
   lists the saved backups (newest first), lets you pick one, then copies it back
   and reloads. Logic lives in `model/Backup.h/.cpp` (`create`/`list`/`restore`);
   `Database::dataFiles()` lists the files to copy.
-* The remaining Patient screens (Result Entry, etc.) show a "coming soon"
-  notice — fill them in with the recipe above.
+* **Export** — every interactive table has an **[Export]** toolbar button that
+  writes the table to `Exports/<name>_<date>.csv` or `.html` (CSV is properly
+  quoted; HTML is a styled table) and offers to open it. Logic in
+  `model/Export.h/.cpp`.
+* **Invoice & receipt documents** — ordering tests generates a printable
+  **invoice** (`Exports/invoice_<id>.html`) and a **payment receipt**
+  (`Exports/receipt_<id>.html`); the same are produced on every later payment,
+  and an invoice can be re-printed from *Invoices & Payments*. They open in the
+  browser (`Console::openFile`), where they print / "Save as PDF" — no extra
+  library needed.
 
 ## Audit trail (timestamps + activity log)
 

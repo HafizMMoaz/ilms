@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <ctime>
 #include <iostream>
+#include <cstdlib>
 
 void Console::gotoxy(int x, int y)
 {
@@ -74,4 +75,16 @@ std::string Console::time()
     char buffer[11];
     strftime(buffer, sizeof(buffer), "%H:%M:%S", localtime(&now));
     return buffer;
+}
+
+void Console::openFile(const std::string &path)
+{
+    // Use cmd's "start" so nothing extra needs linking. Backslashes keep the
+    // shell happy with the path.
+    std::string p = path;
+    for (char &c : p)
+        if (c == '/')
+            c = '\\';
+    std::string cmd = "start \"\" \"" + p + "\"";
+    system(cmd.c_str());
 }

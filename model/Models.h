@@ -201,41 +201,18 @@ struct Company
     }
 };
 
+// A patient is now just demographics. What they ordered, what it costs and what
+// they paid lives in the related Invoice / PatientTest / Payment records, keyed
+// by id (a small relational model instead of everything inline).
 struct Patient
 {
     std::string id, name, cnic, contact, gender, age, bloodGroup, regDate, address;
-    std::string sampleLocation, reference, testCount, price, discount, receivedAmount, balance, status;
     std::string createdAt, updatedAt;
-    std::vector<std::string> tests;        // selected lab-test IDs (max 20)
-    std::vector<std::string> testStatus;   // per-test result status (max 20)
-    std::vector<std::string> specimenTaken; // per-test "Y"/"N" specimen collected (max 20)
-    std::vector<std::string> sampleCode;   // per-test sample code (max 20)
 
-    Patient() : tests(20), testStatus(20), specimenTaken(20, "N"), sampleCode(20) {}
-
-    // Number of tests actually selected for this patient.
-    int testTotal() const
-    {
-        int n = 0;
-        try { n = std::stoi(testCount); } catch (...) { n = 0; }
-        if (n < 0) n = 0;
-        if (n > 20) n = 20;
-        return n;
-    }
-
-    // The test list / status are stored as ';'-joined sub-fields so they fit in
-    // one CSV column each (no extra commas).
     std::string toCSV() const
     {
-        int n = testTotal();
-        std::vector<std::string> t(tests.begin(), tests.begin() + n);
-        std::vector<std::string> s(testStatus.begin(), testStatus.begin() + n);
-        std::vector<std::string> sp(specimenTaken.begin(), specimenTaken.begin() + n);
         return id + "," + name + "," + cnic + "," + contact + "," + gender + "," +
                age + "," + bloodGroup + "," + regDate + "," + address + "," +
-               sampleLocation + "," + reference + "," + testCount + "," + price + "," +
-               discount + "," + receivedAmount + "," + balance + "," + status + "," +
-               Utils::join(t, ';') + "," + Utils::join(s, ';') + "," + Utils::join(sp, ';') + "," +
                createdAt + "," + updatedAt;
     }
     void fromCSV(const std::string &r)
@@ -249,30 +226,86 @@ struct Patient
         bloodGroup = Utils::field(r, 6);
         regDate = Utils::field(r, 7);
         address = Utils::field(r, 8);
-        sampleLocation = Utils::field(r, 9);
-        reference = Utils::field(r, 10);
-        testCount = Utils::field(r, 11);
-        price = Utils::field(r, 12);
-        discount = Utils::field(r, 13);
-        receivedAmount = Utils::field(r, 14);
-        balance = Utils::field(r, 15);
-        status = Utils::field(r, 16);
+        createdAt = Utils::field(r, 9);
+        updatedAt = Utils::field(r, 10);
+    }
+};
 
-        tests.assign(20, "");
-        testStatus.assign(20, "");
-        specimenTaken.assign(20, "N");
-        sampleCode.assign(20, "");
-        auto t = Utils::split(Utils::field(r, 17), ';');
-        auto s = Utils::split(Utils::field(r, 18), ';');
-        auto sp = Utils::split(Utils::field(r, 19), ';');
-        for (size_t i = 0; i < t.size() && i < 20; i++)
-            tests[i] = t[i];
-        for (size_t i = 0; i < s.size() && i < 20; i++)
-            testStatus[i] = s[i];
-        for (size_t i = 0; i < sp.size() && i < 20; i++)
-            specimenTaken[i] = sp[i];
-        createdAt = Utils::field(r, 20);
-        updatedAt = Utils::field(r, 21);
+// One bill per visit. Generated whenever a patient orders a set of tests.
+struct Invoice
+{
+    std::string id, patientId, date, sampleLocation, reference, discount;
+    std::string grossTotal, netTotal, createdAt, updatedAt;
+
+    std::string toCSV() const
+    {
+        return id + "," + patientId + "," + date + "," + sampleLocation + "," +
+               reference + "," + discount + "," + grossTotal + "," + netTotal + "," +
+               createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        patientId = Utils::field(r, 1);
+        date = Utils::field(r, 2);
+        sampleLocation = Utils::field(r, 3);
+        reference = Utils::field(r, 4);
+        discount = Utils::field(r, 5);
+        grossTotal = Utils::field(r, 6);
+        netTotal = Utils::field(r, 7);
+        createdAt = Utils::field(r, 8);
+        updatedAt = Utils::field(r, 9);
+    }
+};
+
+// One row per ordered test, belonging to an invoice (and patient). Tracks
+// whether its specimen was collected and the result once entered.
+struct PatientTest
+{
+    std::string id, invoiceId, patientId, testId, testName, specimen, rate;
+    std::string specimenTaken, status, result, createdAt, updatedAt; // taken Y/N, status PEND/DONE
+
+    std::string toCSV() const
+    {
+        return id + "," + invoiceId + "," + patientId + "," + testId + "," + testName + "," +
+               specimen + "," + rate + "," + specimenTaken + "," + status + "," + result + "," +
+               createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        invoiceId = Utils::field(r, 1);
+        patientId = Utils::field(r, 2);
+        testId = Utils::field(r, 3);
+        testName = Utils::field(r, 4);
+        specimen = Utils::field(r, 5);
+        rate = Utils::field(r, 6);
+        specimenTaken = Utils::field(r, 7);
+        status = Utils::field(r, 8);
+        result = Utils::field(r, 9);
+        createdAt = Utils::field(r, 10);
+        updatedAt = Utils::field(r, 11);
+    }
+};
+
+// A payment made against an invoice. Many payments per invoice => balance =
+// invoice.netTotal - sum(payments).
+struct Payment
+{
+    std::string id, invoiceId, amount, date, createdAt, updatedAt;
+
+    std::string toCSV() const
+    {
+        return id + "," + invoiceId + "," + amount + "," + date + "," + createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        invoiceId = Utils::field(r, 1);
+        amount = Utils::field(r, 2);
+        date = Utils::field(r, 3);
+        createdAt = Utils::field(r, 4);
+        updatedAt = Utils::field(r, 5);
     }
 };
 

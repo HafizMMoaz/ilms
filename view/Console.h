@@ -28,6 +28,10 @@ public:
 
     // Current time as "HH:MM:SS".
     static std::string time();
+
+    // Opens a file with its default application (e.g. an HTML doc in the
+    // browser, where it can be printed / saved as PDF).
+    static void openFile(const std::string &path);
 };
 
 #endif // ILMS_CONSOLE_H

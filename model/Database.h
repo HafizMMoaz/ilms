@@ -22,8 +22,14 @@ public:
     // In-memory only in the original program (no backing file).
     Repository<Package> packages{"DataBase/package.txt", "P001"};
     Repository<Query> queries{"DataBase/query.txt", "Q001"};
-    Repository<Patient> patients{"DataBase/patient.txt", "P001"};
     Repository<User> users{"DataBase/user.txt", "U000"};
+
+    // Patient + billing (relational): a patient orders tests on an invoice and
+    // pays it off over one or more payments.
+    Repository<Patient> patients{"DataBase/patient.txt", "PAT001"};
+    Repository<Invoice> invoices{"DataBase/invoice.txt", "INV001"};
+    Repository<PatientTest> patientTests{"DataBase/patienttest.txt", "PTT001"};
+    Repository<Payment> payments{"DataBase/payment.txt", "PAY001"};
 
     Database();
 

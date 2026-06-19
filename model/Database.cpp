@@ -18,13 +18,17 @@ void Database::loadAll()
     companies.load();
     packages.load();
     patients.load();
+    invoices.load();
+    patientTests.load();
+    payments.load();
 }
 
 std::vector<std::string> Database::dataFiles() const
 {
     return {specimens.path(), labDepartments.path(), labTests.path(),
             machines.path(), sops.path(), companies.path(),
-            packages.path(), patients.path()};
+            packages.path(), patients.path(), invoices.path(),
+            patientTests.path(), payments.path()};
 }
 
 int Database::findLogin(const std::string &username, const std::string &password) const
