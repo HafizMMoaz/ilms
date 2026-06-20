@@ -311,7 +311,9 @@ struct Payment
 
 struct User
 {
-    std::string id, fname, uname, email, password, phone, address, role, location;
+    std::string id, fname, uname, email, password, phone, address, role;
+    std::string area, lat, lng;  // for Home Sampling users (area name + optional coords)
+    std::string companyId;       // for Companies & Doctors users (links a Company)
     std::string createdAt, updatedAt;
     bool active = true;
 
@@ -320,6 +322,72 @@ struct User
          std::string password_, std::string role_, bool active_)
         : id(id_), fname(fname_), uname(uname_), password(password_),
           role(role_), active(active_) {}
+
+    std::string toCSV() const
+    {
+        return id + "," + fname + "," + uname + "," + email + "," + password + "," +
+               phone + "," + address + "," + role + "," + area + "," + lat + "," +
+               lng + "," + companyId + "," + (active ? "1" : "0") + "," +
+               createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        fname = Utils::field(r, 1);
+        uname = Utils::field(r, 2);
+        email = Utils::field(r, 3);
+        password = Utils::field(r, 4);
+        phone = Utils::field(r, 5);
+        address = Utils::field(r, 6);
+        role = Utils::field(r, 7);
+        area = Utils::field(r, 8);
+        lat = Utils::field(r, 9);
+        lng = Utils::field(r, 10);
+        companyId = Utils::field(r, 11);
+        active = (Utils::field(r, 12) != "0");
+        createdAt = Utils::field(r, 13);
+        updatedAt = Utils::field(r, 14);
+    }
+};
+
+// A home-sampling service area: a named area with optional coordinates.
+struct Area
+{
+    std::string id, name, lat, lng, createdAt, updatedAt;
+
+    std::string toCSV() const
+    {
+        return id + "," + name + "," + lat + "," + lng + "," + createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        name = Utils::field(r, 1);
+        lat = Utils::field(r, 2);
+        lng = Utils::field(r, 3);
+        createdAt = Utils::field(r, 4);
+        updatedAt = Utils::field(r, 5);
+    }
+};
+
+// A user role. The built-in ones (fixed == "Y") cannot be edited or deleted;
+// a Super Admin can add more custom roles in the Roles setup screen.
+struct Role
+{
+    std::string id, name, fixed, createdAt, updatedAt; // fixed = "Y" / "N"
+
+    std::string toCSV() const
+    {
+        return id + "," + name + "," + fixed + "," + createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        name = Utils::field(r, 1);
+        fixed = Utils::field(r, 2);
+        createdAt = Utils::field(r, 3);
+        updatedAt = Utils::field(r, 4);
+    }
 };
 
 #endif // ILMS_MODELS_H

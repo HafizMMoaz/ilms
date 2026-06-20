@@ -31,6 +31,12 @@ public:
     Repository<PatientTest> patientTests{"DataBase/patienttest.txt", "PTT001"};
     Repository<Payment> payments{"DataBase/payment.txt", "PAY001"};
 
+    // Dynamic roles (persisted; seeded with the built-in roles on first run).
+    Repository<Role> roles{"DataBase/role.txt", "R000"};
+
+    // Home-sampling service areas (named + optional coordinates).
+    Repository<Area> areas{"DataBase/area.txt", "AR001"};
+
     Database();
 
     // Loads the persisted collections from disk.
@@ -41,6 +47,11 @@ public:
 
     // Finds a user index by credentials (active accounts only); -1 if no match.
     int findLogin(const std::string &username, const std::string &password) const;
+
+private:
+    void seedRoles(); // writes the built-in roles when role.txt is empty
+    void seedUsers(); // writes the default accounts when user.txt is empty
+    void seedAreas(); // writes a few example areas when area.txt is empty
 };
 
 #endif // ILMS_DATABASE_H

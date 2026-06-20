@@ -10,3 +10,6 @@ obj/
 Backup/
 Exports/
 DataBase/logs.txt
+
+# Accounts file holds passwords - keep it out of version control
+DataBase/user.txt

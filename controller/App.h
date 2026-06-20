@@ -34,6 +34,9 @@ class App
         return r == "R008" || r == "R009";
     }
 
+    // Super Admin (R009) only - manages roles.
+    bool isSuperAdmin() const { return session.userRole() == "R009"; }
+
     // flow
     bool login();
     void sessionLoop();
@@ -46,6 +49,24 @@ class App
     void rateListView();
     void backupModule();
     void logsModule(); // admin-only activity log viewer
+
+    // Dynamic roles (Super Admin only).
+    void rolesModule();
+    void addRole();
+    void editRole(int i);
+    void deleteRole(int i);
+
+    // Users management (Admin / Super Admin).
+    void usersModule();
+    void addUser();
+    void editUser(int i);
+    void deleteUser(int i);
+
+    // Home-sampling service areas (Setup).
+    void areasModule();
+    void addArea();
+    void editArea(int i);
+    void deleteArea(int i);
 
     // Reports (read-only summaries, each exportable).
     void reportsModule();

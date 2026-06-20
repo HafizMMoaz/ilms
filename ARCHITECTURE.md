@@ -142,6 +142,19 @@ a real table with a search box and pager.
   built without zlib/libpng) — so documents have **bordered tables** and an
   optional **logo** (`assets/logo.jpg`). They open via `Console::openFile`.
 
+## Roles, Users & Areas
+
+* **Roles** (main menu, **Super Admin** only) — a persisted, dynamic role list
+  seeded with the ten built-in roles; built-ins are locked, custom roles can be
+  added/edited/deleted (`DataBase/role.txt`).
+* **Users** (main menu, **Admin/Super Admin**) — create/manage staff accounts,
+  assign any dynamic role, set password + active. **Home Sampling** users get an
+  assigned **area** (+ optional lat/lng); **Companies & Doctors** users link to a
+  Company. Persisted to `DataBase/user.txt` (git-ignored — it holds passwords;
+  the three default logins are re-seeded if the file is absent).
+* **Sampling Areas** (Setup) — named areas (Nabipura, Mughalpura, …) with
+  optional coordinates, used to route home-sampling collections.
+
 ### Building with the vendored libHaru
 
 `build.bat` compiles `vendor/libharu/src/*.c` once into `libhpdf.a` (cached;

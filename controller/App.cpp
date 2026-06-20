@@ -64,7 +64,12 @@ void App::sessionLoop()
         // dispatch on the chosen label rather than a fixed index.
         std::vector<std::string> menu = {"Dashboard", "Setup", "Patient", "Reports", "Backup"};
         if (isAdmin())
+        {
+            menu.push_back("Users");
             menu.push_back("Activity Logs");
+        }
+        if (isSuperAdmin())
+            menu.push_back("Roles");
         menu.push_back("Logout");
 
         int c = view.dashboardScreen(session.fullName(), stats, menu);
@@ -80,8 +85,12 @@ void App::sessionLoop()
             reportsModule();
         else if (choice == "Backup")
             backupModule();
+        else if (choice == "Users")
+            usersModule();
         else if (choice == "Activity Logs")
             logsModule();
+        else if (choice == "Roles")
+            rolesModule();
         else if (choice == "Logout")
         {
             view.clear();
@@ -130,7 +139,8 @@ void App::setupModule()
         view.clear();
         int c = view.menu("SETUP",
                           {"Specimen", "Lab Departments", "Lab Tests", "Packages",
-                           "Test Rate List", "Machines", "SOPs", "Corporate", "Back"});
+                           "Test Rate List", "Machines", "SOPs", "Corporate",
+                           "Sampling Areas", "Back"});
         switch (c)
         {
         case 0: specimenModule(); break;
@@ -141,7 +151,8 @@ void App::setupModule()
         case 5: machineModule(); break;
         case 6: sopModule(); break;
         case 7: companyModule(); break;
-        case 8: return;
+        case 8: areasModule(); break;
+        case 9: return;
         default:
             view.message("This section is coming soon.");
         }
@@ -301,6 +312,346 @@ void App::referralReport()
     for (size_t k = 0; k < refs.size(); k++)
         rows.push_back({refs[k], to_string(count[k]), to_string(billed[k])});
     showReport("Referrals", {"Reference", "Invoices", "Net billed"}, rows);
+}
+
+// ---------------------------------------------------------------------------
+// ROLES (Super Admin only): the built-in roles are fixed; custom ones can be
+// added / edited / deleted.
+// ---------------------------------------------------------------------------
+void App::rolesModule()
+{
+    logAction("opened Roles");
+    while (true)
+    {
+        db.roles.load();
+        std::vector<std::vector<std::string>> rows;
+        for (int i = 0; i < db.roles.count(); i++)
+        {
+            Role &r = db.roles.at(i);
+            rows.push_back({to_string(i + 1), r.id, r.name,
+                            (r.fixed == "Y") ? "built-in" : "custom"});
+        }
+        std::vector<std::string> headers = {"Sr", "ID", "Role", "Type"};
+        RowAction a = view.entityTable("ROLES  (Super Admin)", headers, rows);
+        switch (a.type)
+        {
+        case RowAction::Add: addRole(); break;
+        case RowAction::Edit: editRole(a.index); break;
+        case RowAction::Delete: deleteRole(a.index); break;
+        case RowAction::Export: exportTable("Roles", headers, rows); break;
+        case RowAction::Back: return;
+        }
+    }
+}
+
+void App::addRole()
+{
+    view.clear();
+    if (db.roles.count() >= Database::MAX)
+    {
+        view.message("You have reached the maximum storage limit.");
+        return;
+    }
+    auto v = view.form("ADD NEW ROLE", {"Role Name"});
+    Role r;
+    r.id = db.roles.nextId();
+    r.name = v[0];
+    r.fixed = "N";
+    db.roles.add(r);
+    db.roles.store();
+    logAction("added role " + r.id + " (" + r.name + ")");
+    view.message("Role added (" + r.id + ").");
+}
+
+void App::editRole(int i)
+{
+    if (i < 0 || i >= db.roles.count())
+        return;
+    view.clear();
+    Role &r = db.roles.at(i);
+    if (r.fixed == "Y")
+    {
+        view.message("Built-in roles cannot be edited.");
+        return;
+    }
+    auto v = view.form("EDIT ROLE " + r.id + "  (current: " + r.name + ")", {"New Name"});
+    r.name = v[0];
+    db.roles.update(i);
+    logAction("updated role " + r.id);
+    view.message("Role updated.");
+}
+
+void App::deleteRole(int i)
+{
+    if (i < 0 || i >= db.roles.count())
+        return;
+    view.clear();
+    Role &r = db.roles.at(i);
+    if (r.fixed == "Y")
+    {
+        view.message("Built-in roles cannot be deleted.");
+        return;
+    }
+    std::string id = r.id;
+    if (!view.confirm("Delete role " + id + "?"))
+        return;
+    db.roles.removeAt(i);
+    db.roles.store();
+    logAction("deleted role " + id);
+    view.message("Role deleted.");
+}
+
+// ---------------------------------------------------------------------------
+// USERS (Admin / Super Admin): create and manage staff accounts, assign a
+// dynamic role; Home-Sampling users get an area (+ optional coords), and
+// Companies & Doctors users link to a Company.
+// ---------------------------------------------------------------------------
+void App::usersModule()
+{
+    logAction("opened Users");
+    while (true)
+    {
+        db.users.load();
+        db.roles.load();
+
+        std::vector<std::vector<std::string>> rows;
+        for (int i = 0; i < db.users.count(); i++)
+        {
+            User &u = db.users.at(i);
+            std::string roleName = u.role;
+            int rk = db.roles.indexOf(u.role);
+            if (rk >= 0)
+                roleName = db.roles.at(rk).name;
+            std::string extra = !u.area.empty() ? u.area
+                                : (!u.companyId.empty() ? u.companyId : "-");
+            rows.push_back({to_string(i + 1), u.id, u.fname, u.uname, roleName,
+                            (u.active ? "yes" : "no"), extra});
+        }
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Username", "Role", "Active", "Area/Co"};
+        RowAction a = view.entityTable("USERS", headers, rows);
+        switch (a.type)
+        {
+        case RowAction::Add: addUser(); break;
+        case RowAction::Edit: editUser(a.index); break;
+        case RowAction::Delete: deleteUser(a.index); break;
+        case RowAction::Export: exportTable("Users", headers, rows); break;
+        case RowAction::Back: return;
+        }
+    }
+}
+
+// Fills a user's role-specific extras (area/coords for home sampling, linked
+// company for corporate). Shared by add and edit.
+static const char *ROLE_HOME = "Home Sampling";
+static const char *ROLE_CORP = "Companies & Doctors";
+
+void App::addUser()
+{
+    view.clear();
+    if (db.roles.count() == 0)
+    {
+        view.message("Define a role first.");
+        return;
+    }
+    if (db.users.count() >= Database::MAX)
+    {
+        view.message("You have reached the maximum storage limit.");
+        return;
+    }
+
+    auto v = view.form("ADD NEW USER",
+                       {"Full Name", "Username", "Password", "Email", "Phone", "Address"});
+    int ri = view.select("Role", db.roles.names());
+    if (ri < 0)
+        return;
+    Role &role = db.roles.at(ri);
+
+    User u;
+    u.id = db.users.nextId();
+    u.fname = v[0];
+    u.uname = v[1];
+    u.password = v[2];
+    u.email = v[3];
+    u.phone = v[4];
+    u.address = v[5];
+    u.role = role.id;
+    u.active = true;
+
+    if (role.name == ROLE_HOME)
+    {
+        if (db.areas.count() > 0)
+        {
+            int ai = view.select("Assign Area", db.areas.names());
+            if (ai >= 0)
+                u.area = db.areas.at(ai).name;
+        }
+        auto c = view.form("Optional coordinates (leave blank to skip)",
+                           {"Latitude", "Longitude"});
+        u.lat = c[0];
+        u.lng = c[1];
+    }
+    else if (role.name == ROLE_CORP)
+    {
+        if (db.companies.count() > 0)
+        {
+            int ci = view.select("Link to Company / Doctor", db.companies.names());
+            if (ci >= 0)
+                u.companyId = db.companies.at(ci).id;
+        }
+    }
+
+    db.users.add(u);
+    db.users.store();
+    logAction("added user " + u.id + " (" + u.uname + ") as " + role.id);
+    view.message("User added (" + u.id + ").");
+}
+
+void App::editUser(int i)
+{
+    if (i < 0 || i >= db.users.count())
+        return;
+    view.clear();
+    User &u = db.users.at(i);
+
+    auto v = view.form("EDIT USER " + u.id + "  (" + u.uname + ")",
+                       {"Full Name", "Username", "Password", "Email", "Phone", "Address"});
+    u.fname = v[0];
+    u.uname = v[1];
+    u.password = v[2];
+    u.email = v[3];
+    u.phone = v[4];
+    u.address = v[5];
+
+    int ri = view.select("Role (current: " + u.role + ")", db.roles.names());
+    if (ri >= 0)
+    {
+        Role &role = db.roles.at(ri);
+        u.role = role.id;
+        u.area.clear();
+        u.lat.clear();
+        u.lng.clear();
+        u.companyId.clear();
+        if (role.name == ROLE_HOME && db.areas.count() > 0)
+        {
+            int ai = view.select("Assign Area", db.areas.names());
+            if (ai >= 0)
+                u.area = db.areas.at(ai).name;
+            auto c = view.form("Optional coordinates", {"Latitude", "Longitude"});
+            u.lat = c[0];
+            u.lng = c[1];
+        }
+        else if (role.name == ROLE_CORP && db.companies.count() > 0)
+        {
+            int ci = view.select("Link to Company / Doctor", db.companies.names());
+            if (ci >= 0)
+                u.companyId = db.companies.at(ci).id;
+        }
+    }
+
+    u.active = view.confirm("Is this user active?");
+    db.users.update(i);
+    logAction("updated user " + u.id);
+    view.message("User updated.");
+}
+
+void App::deleteUser(int i)
+{
+    if (i < 0 || i >= db.users.count())
+        return;
+    view.clear();
+    User &u = db.users.at(i);
+    if (u.id == session.id())
+    {
+        view.message("You cannot delete the account you are logged in with.");
+        return;
+    }
+    std::string id = u.id;
+    if (!view.confirm("Delete user " + id + " (" + u.uname + ")?"))
+        return;
+    db.users.removeAt(i);
+    db.users.store();
+    logAction("deleted user " + id);
+    view.message("User deleted.");
+}
+
+// ---------------------------------------------------------------------------
+// SAMPLING AREAS (Setup): named areas with optional coordinates, used to route
+// home-sampling collections.
+// ---------------------------------------------------------------------------
+void App::areasModule()
+{
+    logAction("opened Sampling Areas");
+    while (true)
+    {
+        db.areas.load();
+        std::vector<std::vector<std::string>> rows;
+        for (int i = 0; i < db.areas.count(); i++)
+        {
+            Area &a = db.areas.at(i);
+            rows.push_back({to_string(i + 1), a.id, a.name, a.lat, a.lng});
+        }
+        std::vector<std::string> headers = {"Sr", "ID", "Area", "Lat", "Lng"};
+        RowAction a = view.entityTable("SAMPLING AREAS", headers, rows);
+        switch (a.type)
+        {
+        case RowAction::Add: addArea(); break;
+        case RowAction::Edit: editArea(a.index); break;
+        case RowAction::Delete: deleteArea(a.index); break;
+        case RowAction::Export: exportTable("Sampling Areas", headers, rows); break;
+        case RowAction::Back: return;
+        }
+    }
+}
+
+void App::addArea()
+{
+    view.clear();
+    if (db.areas.count() >= Database::MAX)
+    {
+        view.message("You have reached the maximum storage limit.");
+        return;
+    }
+    auto v = view.form("ADD SAMPLING AREA",
+                       {"Area Name", "Latitude (optional)", "Longitude (optional)"});
+    Area a;
+    a.id = db.areas.nextId();
+    a.name = v[0];
+    a.lat = v[1];
+    a.lng = v[2];
+    db.areas.add(a);
+    db.areas.store();
+    logAction("added area " + a.id + " (" + a.name + ")");
+    view.message("Area added (" + a.id + ").");
+}
+
+void App::editArea(int i)
+{
+    if (i < 0 || i >= db.areas.count())
+        return;
+    view.clear();
+    Area &a = db.areas.at(i);
+    auto v = view.form("EDIT AREA " + a.id + "  (current: " + a.name + ")",
+                       {"New Name", "Latitude", "Longitude"});
+    a.name = v[0];
+    a.lat = v[1];
+    a.lng = v[2];
+    db.areas.update(i);
+    logAction("updated area " + a.id);
+    view.message("Area updated.");
+}
+
+void App::deleteArea(int i)
+{
+    if (i < 0 || i >= db.areas.count())
+        return;
+    view.clear();
+    std::string id = db.areas.at(i).id;
+    if (!view.confirm("Delete area " + id + "?"))
+        return;
+    db.areas.removeAt(i);
+    db.areas.store();
+    logAction("deleted area " + id);
+    view.message("Area deleted.");
 }
 
 // ---------------------------------------------------------------------------
