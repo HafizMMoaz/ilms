@@ -45,6 +45,12 @@ class App
     void patientRecords();
     void sampleReceiving(); // collect specimens across patients
     void resultEntry();     // enter results for collected specimens
+
+    // Home sampling: assign + collect home-sample visits (payment-gated).
+    void homeSamplingModule();
+    void homeSampleDetail(const std::string &invoiceId);
+    void collectHomeSample(const std::string &invoiceId);
+    std::string homeSamplingRoleId(); // id of the "Home Sampling" role
     void patientSummary();
     void rateListView();
     void backupModule();

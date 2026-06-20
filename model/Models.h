@@ -232,16 +232,19 @@ struct Patient
 };
 
 // One bill per visit. Generated whenever a patient orders a set of tests.
+// For a Home sample, `area` + `homeSampler` (a Home-Sampling user id) record the
+// collection assignment. (area/homeSampler are appended so older rows still load.)
 struct Invoice
 {
     std::string id, patientId, date, sampleLocation, reference, discount;
     std::string grossTotal, netTotal, createdAt, updatedAt;
+    std::string area, homeSampler;
 
     std::string toCSV() const
     {
         return id + "," + patientId + "," + date + "," + sampleLocation + "," +
                reference + "," + discount + "," + grossTotal + "," + netTotal + "," +
-               createdAt + "," + updatedAt;
+               createdAt + "," + updatedAt + "," + area + "," + homeSampler;
     }
     void fromCSV(const std::string &r)
     {
@@ -255,6 +258,8 @@ struct Invoice
         netTotal = Utils::field(r, 7);
         createdAt = Utils::field(r, 8);
         updatedAt = Utils::field(r, 9);
+        area = Utils::field(r, 10);
+        homeSampler = Utils::field(r, 11);
     }
 };
 

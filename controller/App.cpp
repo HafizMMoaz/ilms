@@ -62,7 +62,7 @@ void App::sessionLoop()
 
         // The menu is built dynamically (admins get an extra entry), so we
         // dispatch on the chosen label rather than a fixed index.
-        std::vector<std::string> menu = {"Dashboard", "Setup", "Patient", "Reports", "Backup"};
+        std::vector<std::string> menu = {"Dashboard", "Setup", "Patient", "Home Sampling", "Reports", "Backup"};
         if (isAdmin())
         {
             menu.push_back("Users");
@@ -81,6 +81,8 @@ void App::sessionLoop()
             setupModule();
         else if (choice == "Patient")
             patientModule();
+        else if (choice == "Home Sampling")
+            homeSamplingModule();
         else if (choice == "Reports")
             reportsModule();
         else if (choice == "Backup")
@@ -1002,6 +1004,38 @@ std::string App::orderTests(const std::string &patientId)
     int locIdx = view.select("Sample Location", locations);
     inv.sampleLocation = (locIdx >= 0) ? locations[locIdx] : "LAB";
 
+    // Home sample -> pick an area and assign a home-sampling person.
+    if (inv.sampleLocation == "Home")
+    {
+        if (db.areas.count() > 0)
+        {
+            int ai = view.select("Home sample area", db.areas.names());
+            if (ai >= 0)
+                inv.area = db.areas.at(ai).name;
+        }
+        else
+            inv.area = view.ask("Home sample area");
+
+        std::string homeRole = homeSamplingRoleId();
+        std::vector<std::string> opts, ids;
+        for (int u = 0; u < db.users.count(); u++)
+        {
+            User &usr = db.users.at(u);
+            if (usr.role != homeRole || !usr.active)
+                continue;
+            opts.push_back(usr.fname + "  [" + (usr.area.empty() ? "any area" : usr.area) + "]");
+            ids.push_back(usr.id);
+        }
+        if (!ids.empty())
+        {
+            int hi = view.select("Assign home-sampling person", opts);
+            if (hi >= 0)
+                inv.homeSampler = ids[hi];
+        }
+        else
+            view.message("No active home-sampling staff yet - leaving unassigned.");
+    }
+
     inv.reference = "SELF";
     std::string discount = "0";
     if (view.confirm("Is this a reference patient (company/doctor)?"))
@@ -1428,6 +1462,151 @@ void App::deletePatient(int i)
     db.payments.store();
     logAction("deleted patient " + id + " (cascade)");
     view.message("Patient and related records deleted.");
+}
+
+// ---------------------------------------------------------------------------
+// HOME SAMPLING: visits whose sample location is "Home". A home-sampling user
+// sees only their own assignments; others see all. Payment must be cleared
+// before the sample can be collected.
+// ---------------------------------------------------------------------------
+std::string App::homeSamplingRoleId()
+{
+    for (int i = 0; i < db.roles.count(); i++)
+        if (db.roles.at(i).name == "Home Sampling")
+            return db.roles.at(i).id;
+    return "R005";
+}
+
+void App::homeSamplingModule()
+{
+    logAction("opened Home Sampling");
+    std::string homeRole = homeSamplingRoleId();
+    bool mine = (session.userRole() == homeRole);
+
+    while (true)
+    {
+        db.loadAll();
+        std::vector<std::string> opts, ids;
+        for (int i = 0; i < db.invoices.count(); i++)
+        {
+            Invoice &inv = db.invoices.at(i);
+            if (inv.sampleLocation != "Home")
+                continue;
+            if (mine && inv.homeSampler != session.id())
+                continue;
+
+            std::string pname = "?";
+            int pk = db.patients.indexOf(inv.patientId);
+            if (pk >= 0)
+                pname = db.patients.at(pk).name;
+            std::string sampler = "-";
+            int sk = db.users.indexOf(inv.homeSampler);
+            if (sk >= 0)
+                sampler = db.users.at(sk).fname;
+            long long bal = static_cast<long long>(invoiceNet(inv.id) - invoicePaid(inv.id) + 0.5);
+            bool pending = false;
+            for (int t = 0; t < db.patientTests.count(); t++)
+                if (db.patientTests.at(t).invoiceId == inv.id &&
+                    db.patientTests.at(t).specimenTaken != "Y")
+                    pending = true;
+            std::string status = (bal > 0) ? "PAYMENT DUE" : (pending ? "to collect" : "collected");
+
+            opts.push_back(inv.id + "  " + pname + "  | " + inv.area + " | " + sampler +
+                           " | bal " + to_string(bal > 0 ? bal : 0) + " | " + status);
+            ids.push_back(inv.id);
+        }
+
+        view.clear();
+        if (opts.empty())
+        {
+            view.message(mine ? "No home samples assigned to you." : "No home-sample visits yet.");
+            return;
+        }
+        opts.push_back("<< Back");
+        int sel = view.select("HOME SAMPLING - pick a visit", opts);
+        if (sel < 0 || sel >= (int)ids.size())
+            return;
+        homeSampleDetail(ids[sel]);
+    }
+}
+
+void App::homeSampleDetail(const std::string &invoiceId)
+{
+    while (true)
+    {
+        db.loadAll();
+        int ik = db.invoices.indexOf(invoiceId);
+        if (ik < 0)
+            return;
+        Invoice &inv = db.invoices.at(ik);
+
+        std::vector<std::vector<std::string>> rows;
+        bool anyPending = false;
+        for (int i = 0; i < db.patientTests.count(); i++)
+        {
+            PatientTest &pt = db.patientTests.at(i);
+            if (pt.invoiceId != invoiceId)
+                continue;
+            std::string taken = (pt.specimenTaken == "Y") ? "YES" : "no";
+            if (pt.specimenTaken != "Y")
+                anyPending = true;
+            rows.push_back({pt.testId, pt.testName, pt.specimen, taken, pt.status});
+        }
+        long long net = static_cast<long long>(invoiceNet(invoiceId) + 0.5);
+        long long paid = static_cast<long long>(invoicePaid(invoiceId) + 0.5);
+        long long bal = net - paid;
+
+        std::string pname = "?";
+        int pk = db.patients.indexOf(inv.patientId);
+        if (pk >= 0)
+            pname = db.patients.at(pk).name;
+        std::string sampler = "(unassigned)";
+        int sk = db.users.indexOf(inv.homeSampler);
+        if (sk >= 0)
+            sampler = db.users.at(sk).fname;
+
+        view.clear();
+        view.table("HOME SAMPLE " + invoiceId + "   [" + pname + " / " + inv.area + " / " +
+                       sampler + "]   Balance " + to_string(bal > 0 ? bal : 0),
+                   {"Test", "Name", "Specimen", "Taken", "Status"}, rows);
+
+        std::vector<std::string> actions;
+        if (bal > 0)
+            actions.push_back("Receive Payment");
+        if (bal <= 0 && anyPending)
+            actions.push_back("Collect Sample (mark done)");
+        actions.push_back("Back");
+
+        int c = view.menu("Home sampling actions", actions);
+        std::string act = actions[c];
+        if (act == "Receive Payment")
+            addPayment(invoiceId);
+        else if (act.rfind("Collect Sample", 0) == 0)
+            collectHomeSample(invoiceId);
+        else
+            return;
+    }
+}
+
+void App::collectHomeSample(const std::string &invoiceId)
+{
+    view.clear();
+    if (!view.confirm("Mark the home sample as COLLECTED for invoice " + invoiceId + "?"))
+        return;
+    int changed = 0;
+    for (int i = 0; i < db.patientTests.count(); i++)
+    {
+        PatientTest &pt = db.patientTests.at(i);
+        if (pt.invoiceId == invoiceId && pt.specimenTaken != "Y")
+        {
+            pt.specimenTaken = "Y";
+            changed++;
+        }
+    }
+    if (changed)
+        db.patientTests.store();
+    logAction("home sample collected for invoice " + invoiceId + " (" + to_string(changed) + " tests)");
+    view.message("Home sample collected (" + to_string(changed) + " test(s)). Results can now be entered.");
 }
 
 // ---------------------------------------------------------------------------
