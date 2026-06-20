@@ -77,10 +77,7 @@ void App::sessionLoop()
         else if (choice == "Patient")
             patientModule();
         else if (choice == "Reports")
-        {
-            view.clear();
-            view.message("Reports module - coming soon.");
-        }
+            reportsModule();
         else if (choice == "Backup")
             backupModule();
         else if (choice == "Activity Logs")
@@ -201,6 +198,112 @@ void App::backupModule()
 }
 
 // ---------------------------------------------------------------------------
+// REPORTS : read-only summaries, each viewable then exportable (CSV / HTML).
+// ---------------------------------------------------------------------------
+void App::reportsModule()
+{
+    logAction("opened Reports");
+    while (true)
+    {
+        view.clear();
+        int c = view.menu("REPORTS",
+                          {"Financial Summary", "Test & Specimen Status", "Referrals", "Back"});
+        switch (c)
+        {
+        case 0: financialReport(); break;
+        case 1: testStatusReport(); break;
+        case 2: referralReport(); break;
+        default: return;
+        }
+    }
+}
+
+void App::showReport(const std::string &title, const std::vector<std::string> &headers,
+                     const std::vector<std::vector<std::string>> &rows)
+{
+    while (true)
+    {
+        view.clear();
+        view.table(title, headers, rows);
+        int c = view.menu("Report actions", {"Export", "Back"});
+        if (c == 0)
+            exportTable(title, headers, rows);
+        else
+            return;
+    }
+}
+
+void App::financialReport()
+{
+    db.loadAll();
+    long long net = 0, paid = 0;
+    for (int i = 0; i < db.invoices.count(); i++)
+        net += static_cast<long long>(invoiceNet(db.invoices.at(i).id) + 0.5);
+    for (int i = 0; i < db.payments.count(); i++)
+        try { paid += std::stoll(db.payments.at(i).amount); } catch (...) {}
+    long long outstanding = net - paid;
+
+    std::vector<std::vector<std::string>> rows = {
+        {"Invoices (visits)", to_string(db.invoices.count())},
+        {"Payments recorded", to_string(db.payments.count())},
+        {"Total billed (net)", to_string(net)},
+        {"Total received", to_string(paid)},
+        {"Total outstanding", to_string(outstanding > 0 ? outstanding : 0)},
+    };
+    showReport("Financial Summary", {"Metric", "Value"}, rows);
+}
+
+void App::testStatusReport()
+{
+    db.loadAll();
+    int total = db.patientTests.count();
+    int collected = 0, pending = 0, done = 0;
+    for (int i = 0; i < total; i++)
+    {
+        PatientTest &pt = db.patientTests.at(i);
+        (pt.specimenTaken == "Y") ? collected++ : pending++;
+        if (pt.status == "DONE") done++;
+    }
+    std::vector<std::vector<std::string>> rows = {
+        {"Tests ordered", to_string(total)},
+        {"Specimens collected", to_string(collected)},
+        {"Specimens pending", to_string(pending)},
+        {"Results entered", to_string(done)},
+        {"Results pending", to_string(collected - done)},
+    };
+    showReport("Test & Specimen Status", {"Metric", "Value"}, rows);
+}
+
+void App::referralReport()
+{
+    db.loadAll();
+    std::vector<std::string> refs;
+    std::vector<int> count;
+    std::vector<long long> billed;
+    for (int i = 0; i < db.invoices.count(); i++)
+    {
+        Invoice &inv = db.invoices.at(i);
+        std::string r = inv.reference.empty() ? "SELF" : inv.reference;
+        int idx = -1;
+        for (size_t k = 0; k < refs.size(); k++)
+            if (refs[k] == r) { idx = (int)k; break; }
+        if (idx < 0)
+        {
+            refs.push_back(r);
+            count.push_back(0);
+            billed.push_back(0);
+            idx = (int)refs.size() - 1;
+        }
+        count[idx]++;
+        billed[idx] += static_cast<long long>(invoiceNet(inv.id) + 0.5);
+    }
+    std::vector<std::vector<std::string>> rows;
+    for (size_t k = 0; k < refs.size(); k++)
+        rows.push_back({refs[k], to_string(count[k]), to_string(billed[k])});
+    showReport("Referrals", {"Reference", "Invoices", "Net billed"}, rows);
+}
+
+// ---------------------------------------------------------------------------
 // PATIENT area (relational): records + sample receiving + result entry +
 // summary. A visit creates an Invoice with PatientTest rows; money is tracked
 // in Payment rows, so a balance is netTotal - sum(payments).
@@ -276,8 +379,8 @@ void App::exportTable(const std::string &title,
                       const std::vector<std::vector<std::string>> &rows)
 {
     view.clear();
-    int fmt = view.menu("EXPORT '" + title + "'", {"CSV", "HTML", "Cancel"});
-    if (fmt == 2)
+    int fmt = view.menu("EXPORT '" + title + "'", {"CSV", "HTML", "PDF", "Cancel"});
+    if (fmt == 3)
         return;
 
     std::string stamp = Console::date(); // YYYY-MM-DD
@@ -289,10 +392,15 @@ void App::exportTable(const std::string &title,
         path = base + ".csv";
         ok = Export::csv(path, headers, rows);
     }
-    else
+    else if (fmt == 1)
     {
         path = base + ".html";
         ok = Export::html(path, title, headers, rows);
+    }
+    else
+    {
+        path = base + ".pdf";
+        ok = Export::tablePdf(path, title, headers, rows);
     }
 
     if (!ok)
@@ -335,17 +443,63 @@ void App::printInvoice(const std::string &invoiceId)
     {
         PatientTest &pt = db.patientTests.at(i);
         if (pt.invoiceId == inv.id)
-            doc.tests.push_back({pt.testName, pt.specimen, pt.rate});
+            doc.tests.push_back({pt.testName, pt.specimen, pt.rate, pt.status, pt.result});
     }
 
-    std::string path = "Exports/invoice_" + inv.id + ".html";
-    if (!Export::invoice(path, doc))
+    std::string path = "Exports/invoice_" + inv.id + ".pdf";
+    if (!Export::invoicePdf(path, doc))
     {
         view.message("Could not write the invoice document.");
         return;
     }
     logAction("generated invoice document " + inv.id);
     if (view.confirm("Invoice saved to " + path + ".  Open / print now?"))
+        Console::openFile(path);
+}
+
+// Generates a printable lab report (tests + results) for an invoice.
+void App::printReport(const std::string &invoiceId)
+{
+    int k = db.invoices.indexOf(invoiceId);
+    if (k < 0)
+        return;
+    Invoice &inv = db.invoices.at(k);
+
+    Export::ReportDoc doc;
+    doc.invoiceId = inv.id;
+    doc.date = Console::date();
+    doc.patientId = inv.patientId;
+    doc.reference = inv.reference;
+    int pk = db.patients.indexOf(inv.patientId);
+    if (pk >= 0)
+    {
+        Patient &p = db.patients.at(pk);
+        doc.patientName = p.name;
+        doc.patientContact = p.contact;
+        doc.gender = p.gender;
+        doc.age = p.age;
+        doc.bloodGroup = p.bloodGroup;
+    }
+    for (int i = 0; i < db.patientTests.count(); i++)
+    {
+        PatientTest &pt = db.patientTests.at(i);
+        if (pt.invoiceId != inv.id)
+            continue;
+        std::string unit;
+        int lk = db.labTests.indexOf(pt.testId);
+        if (lk >= 0)
+            unit = db.labTests.at(lk).unit;
+        doc.tests.push_back({pt.testName, pt.result, unit, pt.status});
+    }
+
+    std::string path = "Exports/report_" + inv.id + ".pdf";
+    if (!Export::reportPdf(path, doc))
+    {
+        view.message("Could not write the report document.");
+        return;
+    }
+    logAction("generated lab report for invoice " + inv.id);
+    if (view.confirm("Report saved to " + path + ".  Open / print now?"))
         Console::openFile(path);
 }
 
@@ -373,8 +527,8 @@ void App::printReceipt(const std::string &invoiceId, const std::string &paymentI
             doc.patientName = db.patients.at(pk).name;
     }
 
-    std::string path = "Exports/receipt_" + pay.id + ".html";
-    if (!Export::receipt(path, doc))
+    std::string path = "Exports/receipt_" + pay.id + ".pdf";
+    if (!Export::receiptPdf(path, doc))
         return;
     logAction("generated receipt " + pay.id);
     if (view.confirm("Receipt saved to " + path + ".  Open / print now?"))
@@ -721,11 +875,14 @@ void App::invoiceDetail(const std::string &invoiceId)
                        to_string(paid) + "  Balance " + to_string(bal > 0 ? bal : 0),
                    {"Test", "Name", "Specimen", "Rate", "Taken", "Status", "Result"}, rows);
 
-        int c = view.menu("Invoice actions", {"Add Payment", "Print Invoice", "Back"});
+        int c = view.menu("Invoice actions",
+                          {"Add Payment", "Print Invoice", "Print Lab Report", "Back"});
         if (c == 0)
             addPayment(invoiceId);
         else if (c == 1)
             printInvoice(invoiceId);
+        else if (c == 2)
+            printReport(invoiceId);
         else
             return;
     }

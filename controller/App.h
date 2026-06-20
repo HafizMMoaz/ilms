@@ -47,6 +47,14 @@ class App
     void backupModule();
     void logsModule(); // admin-only activity log viewer
 
+    // Reports (read-only summaries, each exportable).
+    void reportsModule();
+    void financialReport();
+    void testStatusReport();
+    void referralReport();
+    void showReport(const std::string &title, const std::vector<std::string> &headers,
+                    const std::vector<std::vector<std::string>> &rows);
+
     void companyModule();
     void addCompany();
     void editCompany(int i);
@@ -114,6 +122,7 @@ class App
                      const std::vector<std::vector<std::string>> &rows);
     void printInvoice(const std::string &invoiceId);
     void printReceipt(const std::string &invoiceId, const std::string &paymentId);
+    void printReport(const std::string &invoiceId);
 
 public:
     explicit App(View &v) : view(v) {}

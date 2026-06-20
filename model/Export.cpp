@@ -1,4 +1,5 @@
 #include "Export.h"
+#include "Pdf.h"
 
 #include <fstream>
 #include <direct.h> // _mkdir (MinGW)
@@ -121,15 +122,19 @@ namespace Export
         f << "<b>Sample location:</b> " << esc(d.sampleLocation) << "<br>";
         f << "<b>Reference:</b> " << esc(d.reference) << "</p>";
 
-        f << "<table><thead><tr><th>#</th><th>Test</th><th>Specimen</th><th>Rate</th></tr></thead><tbody>";
+        f << "<table><thead><tr><th>#</th><th>Test</th><th>Specimen</th><th>Rate</th>"
+             "<th>Status</th><th>Result</th></tr></thead><tbody>";
         int n = 1;
         for (const auto &t : d.tests)
         {
             std::string name = t.size() > 0 ? t[0] : "";
             std::string spec = t.size() > 1 ? t[1] : "";
             std::string rate = t.size() > 2 ? t[2] : "";
+            std::string status = t.size() > 3 ? t[3] : "";
+            std::string result = t.size() > 4 ? t[4] : "";
             f << "<tr><td>" << n++ << "</td><td>" << esc(name) << "</td><td>"
-              << esc(spec) << "</td><td>" << esc(rate) << "</td></tr>";
+              << esc(spec) << "</td><td>" << esc(rate) << "</td><td>" << esc(status)
+              << "</td><td>" << esc(result) << "</td></tr>";
         }
         f << "</tbody></table>";
 
@@ -165,5 +170,126 @@ namespace Export
         f << "<p class=\"muted\">Thank you. Print with Ctrl+P.</p>";
         f << "</body></html>";
         return true;
+    }
+
+    bool report(const std::string &path, const ReportDoc &d)
+    {
+        ensureParentDir(path);
+        std::ofstream f(path);
+        if (!f)
+            return false;
+        f << "<!doctype html><html><head><meta charset=\"utf-8\"><title>Lab Report "
+          << esc(d.invoiceId) << "</title>" << STYLE << "</head><body>";
+        f << "<h1>ILMS - Laboratory Report</h1>";
+        f << "<p><b>Patient:</b> " << esc(d.patientName) << " (" << esc(d.patientId) << ")"
+          << " &nbsp; <b>Gender:</b> " << esc(d.gender)
+          << " &nbsp; <b>Age:</b> " << esc(d.age)
+          << " &nbsp; <b>Blood group:</b> " << esc(d.bloodGroup) << "<br>";
+        f << "<b>Contact:</b> " << esc(d.patientContact)
+          << " &nbsp; <b>Reference:</b> " << esc(d.reference) << "<br>";
+        f << "<b>Invoice:</b> " << esc(d.invoiceId)
+          << " &nbsp; <b>Date:</b> " << esc(d.date) << "</p>";
+
+        f << "<table><thead><tr><th>#</th><th>Test</th><th>Result</th><th>Unit</th>"
+             "<th>Status</th></tr></thead><tbody>";
+        int n = 1;
+        for (const auto &t : d.tests)
+        {
+            std::string name = t.size() > 0 ? t[0] : "";
+            std::string result = t.size() > 1 ? t[1] : "";
+            std::string unit = t.size() > 2 ? t[2] : "";
+            std::string status = t.size() > 3 ? t[3] : "";
+            f << "<tr><td>" << n++ << "</td><td>" << esc(name) << "</td><td>"
+              << esc(result) << "</td><td>" << esc(unit) << "</td><td>"
+              << esc(status) << "</td></tr>";
+        }
+        f << "</tbody></table>";
+        f << "<p class=\"muted\">Results pending tests are blank. Print with Ctrl+P.</p>";
+        f << "</body></html>";
+        return true;
+    }
+
+    // ---- PDF variants -----------------------------------------------------
+    bool tablePdf(const std::string &path, const std::string &title,
+                  const std::vector<std::string> &headers,
+                  const std::vector<std::vector<std::string>> &rows)
+    {
+        Pdf pdf;
+        pdf.line("ILMS - " + title);
+        pdf.blank();
+        pdf.table(headers, rows);
+        pdf.blank();
+        pdf.line(std::to_string(rows.size()) + " record(s).");
+        return pdf.save(path);
+    }
+
+    bool invoicePdf(const std::string &path, const InvoiceDoc &d)
+    {
+        Pdf pdf;
+        pdf.line("ILMS - Integrated Lab Management System");
+        pdf.line("INVOICE " + d.id);
+        pdf.blank();
+        pdf.line("Date      : " + d.date);
+        pdf.line("Patient   : " + d.patientName + " (" + d.patientId + ")");
+        pdf.line("Contact   : " + d.patientContact);
+        pdf.line("Location  : " + d.sampleLocation);
+        pdf.line("Reference : " + d.reference);
+        pdf.blank();
+        std::vector<std::vector<std::string>> r;
+        int n = 1;
+        for (const auto &t : d.tests)
+        {
+            std::vector<std::string> row;
+            row.push_back(std::to_string(n++));
+            for (const auto &x : t)
+                row.push_back(x);
+            r.push_back(row);
+        }
+        pdf.table({"#", "Test", "Specimen", "Rate", "Status", "Result"}, r);
+        pdf.blank();
+        pdf.line("Gross total : " + d.gross);
+        pdf.line("Discount    : " + d.discount + "%");
+        pdf.line("Net total   : " + d.net);
+        pdf.line("Paid        : " + d.paid);
+        pdf.line("Balance     : " + d.balance);
+        return pdf.save(path);
+    }
+
+    bool receiptPdf(const std::string &path, const ReceiptDoc &d)
+    {
+        Pdf pdf;
+        pdf.line("ILMS - Payment Receipt " + d.id);
+        pdf.blank();
+        pdf.line("Date            : " + d.date);
+        pdf.line("Patient         : " + d.patientName);
+        pdf.line("Invoice         : " + d.invoiceId);
+        pdf.line("Amount paid     : " + d.amount);
+        pdf.line("Total paid so far: " + d.paidTotal);
+        pdf.line("Balance remaining: " + d.balance);
+        return pdf.save(path);
+    }
+
+    bool reportPdf(const std::string &path, const ReportDoc &d)
+    {
+        Pdf pdf;
+        pdf.line("ILMS - Laboratory Report");
+        pdf.blank();
+        pdf.line("Patient   : " + d.patientName + " (" + d.patientId + ")");
+        pdf.line("Gender/Age: " + d.gender + " / " + d.age + "   Blood: " + d.bloodGroup);
+        pdf.line("Contact   : " + d.patientContact + "   Reference: " + d.reference);
+        pdf.line("Invoice   : " + d.invoiceId + "   Date: " + d.date);
+        pdf.blank();
+        std::vector<std::vector<std::string>> r;
+        int n = 1;
+        for (const auto &t : d.tests)
+        {
+            std::vector<std::string> row;
+            row.push_back(std::to_string(n++));
+            for (const auto &x : t)
+                row.push_back(x);
+            r.push_back(row);
+        }
+        pdf.table({"#", "Test", "Result", "Unit", "Status"}, r);
+        return pdf.save(path);
     }
 }

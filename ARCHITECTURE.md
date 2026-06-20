@@ -14,6 +14,8 @@ main.cpp                 Composition root: picks a View, starts the App.
 │   ├── Validator.h/.cpp    Pure input checks
 │   ├── Backup.h/.cpp       Copy data files to/from a Backup folder
 │   ├── Logger.h/.cpp       Append timestamped activity to logs.txt
+│   ├── Export.h/.cpp       CSV/HTML table export + invoice/receipt/report docs
+│   ├── Pdf.h/.cpp          Dependency-free PDF writer (Courier, paginated)
 │   └── Database.h/.cpp     Owns one Repository per record type + login lookup
 │
 ├── view/    (V)  Everything you can see / press.
@@ -124,16 +126,17 @@ a real table with a search box and pager.
   lists the saved backups (newest first), lets you pick one, then copies it back
   and reloads. Logic lives in `model/Backup.h/.cpp` (`create`/`list`/`restore`);
   `Database::dataFiles()` lists the files to copy.
-* **Export** — every interactive table has an **[Export]** toolbar button that
-  writes the table to `Exports/<name>_<date>.csv` or `.html` (CSV is properly
-  quoted; HTML is a styled table) and offers to open it. Logic in
-  `model/Export.h/.cpp`.
-* **Invoice & receipt documents** — ordering tests generates a printable
-  **invoice** (`Exports/invoice_<id>.html`) and a **payment receipt**
-  (`Exports/receipt_<id>.html`); the same are produced on every later payment,
-  and an invoice can be re-printed from *Invoices & Payments*. They open in the
-  browser (`Console::openFile`), where they print / "Save as PDF" — no extra
-  library needed.
+* **Reports** (main menu): Financial Summary, Test & Specimen Status, and
+  Referrals — each a read-only table that can be exported.
+* **Export** — every interactive table (and each report) can be exported to
+  **CSV / HTML / PDF** (`Exports/<name>_<date>.<ext>`). CSV is properly quoted,
+  HTML is a styled table, PDF is a real `.pdf`. Logic in `model/Export.h/.cpp`.
+* **Invoice, receipt & lab-report documents** — ordering tests generates a
+  printable **invoice** (`Exports/invoice_<id>.pdf`) and a **payment receipt**;
+  more receipts on every later payment; and a **lab report** (tests + results)
+  from *Invoices & Payments → Print Lab Report*. All are real PDFs, written by
+  the hand-rolled `model/Pdf` writer (**no third-party library**), and opened
+  via `Console::openFile`.
 
 ## Audit trail (timestamps + activity log)
 
