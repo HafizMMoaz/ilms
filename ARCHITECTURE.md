@@ -15,8 +15,11 @@ main.cpp                 Composition root: picks a View, starts the App.
 │   ├── Backup.h/.cpp       Copy data files to/from a Backup folder
 │   ├── Logger.h/.cpp       Append timestamped activity to logs.txt
 │   ├── Export.h/.cpp       CSV/HTML table export + invoice/receipt/report docs
-│   ├── Pdf.h/.cpp          Dependency-free PDF writer (Courier, paginated)
+│   ├── Pdf.h/.cpp          PDF writer backed by libHaru (logos, bordered tables)
 │   └── Database.h/.cpp     Owns one Repository per record type + login lookup
+│
+vendor/libharu/            Vendored libHaru 2.3.0 (no zlib/libpng); built to libhpdf.a
+assets/logo.jpg            Optional logo embedded into PDF documents
 │
 ├── view/    (V)  Everything you can see / press.
 │   ├── View.h             Abstract interface the controller talks to (the contract)
@@ -134,9 +137,16 @@ a real table with a search box and pager.
 * **Invoice, receipt & lab-report documents** — ordering tests generates a
   printable **invoice** (`Exports/invoice_<id>.pdf`) and a **payment receipt**;
   more receipts on every later payment; and a **lab report** (tests + results)
-  from *Invoices & Payments → Print Lab Report*. All are real PDFs, written by
-  the hand-rolled `model/Pdf` writer (**no third-party library**), and opened
-  via `Console::openFile`.
+  from *Invoices & Payments → Print Lab Report*. All are real PDFs rendered by
+  `model/Pdf`, which is backed by **libHaru** (vendored in `vendor/libharu/`,
+  built without zlib/libpng) — so documents have **bordered tables** and an
+  optional **logo** (`assets/logo.jpg`). They open via `Console::openFile`.
+
+### Building with the vendored libHaru
+
+`build.bat` compiles `vendor/libharu/src/*.c` once into `libhpdf.a` (cached;
+delete it to rebuild) and links the app against it. CI does the same. Nothing
+needs to be installed — the library source ships in the repo.
 
 ## Audit trail (timestamps + activity log)
 

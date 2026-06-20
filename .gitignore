@@ -2,6 +2,10 @@
 ilms.exe
 *.o
 
+# Vendored libHaru build output (rebuilt by build.bat)
+libhpdf.a
+obj/
+
 # Runtime-generated
 Backup/
 Exports/

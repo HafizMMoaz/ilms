@@ -1,8 +1,8 @@
 #include "Pdf.h"
+#include "hpdf.h"
 
 #include <fstream>
 #include <algorithm>
-#include <cstdio>
 #include <direct.h> // _mkdir (MinGW)
 
 namespace
@@ -14,31 +14,125 @@ namespace
             _mkdir(path.substr(0, s).c_str());
     }
 
-    // Escape characters special inside a PDF string literal; drop anything that
-    // isn't printable ASCII (Courier is a Latin font).
-    std::string escapePdf(const std::string &s)
+    // libHaru is a Latin-only library here; keep printable ASCII.
+    std::string ascii(const std::string &s)
     {
         std::string o;
         for (unsigned char c : s)
-        {
-            if (c == '\\' || c == '(' || c == ')')
-            {
-                o += '\\';
-                o += (char)c;
-            }
-            else if (c < 32 || c > 126)
-                o += ' ';
-            else
-                o += (char)c;
-        }
+            o += (c >= 32 && c <= 126) ? (char)c : ' ';
         return o;
     }
+
+    // On error libHaru calls this; we just flag the document as failed and
+    // return (further API calls then become safe no-ops).
+    void errorHandler(HPDF_STATUS, HPDF_STATUS, void *user)
+    {
+        if (user)
+            static_cast<Pdf *>(user)->markError();
+    }
+
+    const double MARGIN = 40.0;
+}
+
+Pdf::Pdf()
+{
+    HPDF_Doc doc = HPDF_New(errorHandler, this);
+    if (!doc)
+        return;
+    doc_ = doc;
+    HPDF_SetCompressionMode(doc, HPDF_COMP_NONE);
+    font_ = HPDF_GetFont(doc, "Helvetica", NULL);
+    bold_ = HPDF_GetFont(doc, "Helvetica-Bold", NULL);
+    mono_ = HPDF_GetFont(doc, "Courier", NULL);
+    ok_ = true;
+    newPage();
+}
+
+Pdf::~Pdf()
+{
+    if (doc_)
+        HPDF_Free((HPDF_Doc)doc_);
+}
+
+void Pdf::newPage()
+{
+    HPDF_Page page = HPDF_AddPage((HPDF_Doc)doc_);
+    HPDF_Page_SetSize(page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT);
+    page_ = page;
+    y_ = HPDF_Page_GetHeight(page) - MARGIN;
+}
+
+void Pdf::ensure(double needed)
+{
+    if (y_ - needed < MARGIN)
+        newPage();
+}
+
+void Pdf::text(double x, double y, void *font, double size, const std::string &s)
+{
+    HPDF_Page p = (HPDF_Page)page_;
+    HPDF_Page_SetFontAndSize(p, (HPDF_Font)font, size);
+    HPDF_Page_BeginText(p);
+    HPDF_Page_TextOut(p, x, y, ascii(s).c_str());
+    HPDF_Page_EndText(p);
+}
+
+void Pdf::heading(const std::string &title)
+{
+    double left = MARGIN;
+
+    // Optional logo (JPEG) from assets/logo.jpg.
+    std::ifstream lf("assets/logo.jpg", std::ios::binary);
+    if (lf.good())
+    {
+        lf.close();
+        HPDF_Image img = HPDF_LoadJpegImageFromFile((HPDF_Doc)doc_, "assets/logo.jpg");
+        if (img && ok_)
+        {
+            const double w = 90, h = 45;
+            HPDF_Page_DrawImage((HPDF_Page)page_, img, left, y_ - h + 12, w, h);
+            left += w + 12;
+        }
+    }
+
+    text(left, y_, bold_, 18, title);
+    y_ -= 26;
+
+    HPDF_Page p = (HPDF_Page)page_;
+    HPDF_Page_SetLineWidth(p, 1.0);
+    HPDF_Page_MoveTo(p, MARGIN, y_ + 6);
+    HPDF_Page_LineTo(p, HPDF_Page_GetWidth(p) - MARGIN, y_ + 6);
+    HPDF_Page_Stroke(p);
+    y_ -= 8;
+}
+
+void Pdf::line(const std::string &t)
+{
+    ensure(16);
+    text(MARGIN, y_, font_, 11, t);
+    y_ -= 16;
+}
+
+void Pdf::keyVal(const std::string &k, const std::string &v)
+{
+    ensure(15);
+    text(MARGIN, y_, bold_, 10, k);
+    text(MARGIN + 110, y_, font_, 10, v);
+    y_ -= 15;
+}
+
+void Pdf::blank()
+{
+    y_ -= 8;
 }
 
 void Pdf::table(const std::vector<std::string> &headers,
                 const std::vector<std::vector<std::string>> &rows)
 {
-    int cols = static_cast<int>(headers.size());
+    int cols = (int)headers.size();
+    if (cols == 0)
+        return;
+
     std::vector<std::size_t> w(cols, 0);
     for (int c = 0; c < cols; c++)
         w[c] = headers[c].size();
@@ -46,96 +140,74 @@ void Pdf::table(const std::vector<std::string> &headers,
         for (int c = 0; c < cols && c < (int)r.size(); c++)
             w[c] = std::max(w[c], r[c].size());
 
-    auto fmt = [&](const std::vector<std::string> &r)
-    {
-        std::string out;
-        for (int c = 0; c < cols; c++)
-        {
-            std::string cell = (c < (int)r.size()) ? r[c] : "";
-            cell.resize(w[c], ' ');
-            out += (c ? " | " : "") + cell;
-        }
-        return out;
-    };
-
-    line(fmt(headers));
-    std::string sep;
+    const double charW = 5.2, pad = 6, rowH = 15, fs = 9;
+    std::vector<double> cw(cols);
+    double total = 0;
     for (int c = 0; c < cols; c++)
     {
-        if (c) sep += "-+-";
-        sep += std::string(w[c], '-');
+        cw[c] = w[c] * charW + 2 * pad;
+        total += cw[c];
     }
-    line(sep);
-    for (const auto &r : rows)
-        line(fmt(r));
-}
-
-bool Pdf::save(const std::string &path) const
-{
-    const int LINES_PER_PAGE = 58;
-    const int MAX_CHARS = 95; // keep lines inside the page width
-
-    std::vector<std::string> ls = lines_;
-    if (ls.empty())
-        ls.push_back("");
-    int pageCount = (int)((ls.size() + LINES_PER_PAGE - 1) / LINES_PER_PAGE);
-    if (pageCount < 1)
-        pageCount = 1;
-    int totalObjs = 3 + 2 * pageCount; // catalog, pages, font, then page+content per page
-
-    std::string out = "%PDF-1.4\n";
-    std::vector<std::size_t> off(totalObjs + 1, 0);
-    auto emit = [&](int num, const std::string &body)
+    double maxW = HPDF_Page_GetWidth((HPDF_Page)page_) - 2 * MARGIN;
+    if (total > maxW)
     {
-        off[num] = out.size();
-        out += std::to_string(num) + " 0 obj\n" + body + "\nendobj\n";
+        double k = maxW / total;
+        for (int c = 0; c < cols; c++)
+            cw[c] *= k;
+        total = maxW;
+    }
+
+    auto drawRow = [&](const std::vector<std::string> &cells, bool header)
+    {
+        ensure(rowH + 2);
+        HPDF_Page p = (HPDF_Page)page_;
+        double top = y_, bottom = y_ - rowH;
+
+        if (header)
+        {
+            HPDF_Page_SetRGBFill(p, 0.88, 0.95, 0.91);
+            HPDF_Page_Rectangle(p, MARGIN, bottom, total, rowH);
+            HPDF_Page_Fill(p);
+        }
+
+        double x = MARGIN;
+        for (int c = 0; c < cols; c++)
+        {
+            std::string cell = (c < (int)cells.size()) ? cells[c] : "";
+            std::size_t maxch = (std::size_t)((cw[c] - 2 * pad) / charW);
+            if (maxch > 1 && cell.size() > maxch)
+                cell = cell.substr(0, maxch);
+            text(x + pad, bottom + 4, mono_, fs, cell);
+            x += cw[c];
+        }
+
+        HPDF_Page_SetLineWidth(p, 0.5);
+        HPDF_Page_SetRGBStroke(p, 0.5, 0.5, 0.5);
+        HPDF_Page_Rectangle(p, MARGIN, bottom, total, rowH);
+        HPDF_Page_Stroke(p);
+        x = MARGIN;
+        for (int c = 0; c < cols - 1; c++)
+        {
+            x += cw[c];
+            HPDF_Page_MoveTo(p, x, bottom);
+            HPDF_Page_LineTo(p, x, top);
+            HPDF_Page_Stroke(p);
+        }
+        HPDF_Page_SetRGBStroke(p, 0, 0, 0);
+        y_ -= rowH;
     };
 
-    emit(1, "<< /Type /Catalog /Pages 2 0 R >>");
-    std::string kids;
-    for (int p = 0; p < pageCount; p++)
-        kids += std::to_string(4 + 2 * p) + " 0 R ";
-    emit(2, "<< /Type /Pages /Kids [" + kids + "] /Count " + std::to_string(pageCount) + " >>");
-    emit(3, "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>");
+    drawRow(headers, true);
+    for (const auto &r : rows)
+        drawRow(r, false);
+    y_ -= 4;
+}
 
-    for (int p = 0; p < pageCount; p++)
-    {
-        int pageObj = 4 + 2 * p, contentObj = 5 + 2 * p;
-        std::string stream = "BT\n/F1 10 Tf\n12 TL\n50 760 Td\n";
-        int start = p * LINES_PER_PAGE;
-        int end = std::min((int)ls.size(), start + LINES_PER_PAGE);
-        for (int i = start; i < end; i++)
-        {
-            std::string s = ls[i];
-            if ((int)s.size() > MAX_CHARS)
-                s = s.substr(0, MAX_CHARS);
-            stream += "(" + escapePdf(s) + ") Tj\nT*\n";
-        }
-        stream += "ET";
-
-        emit(pageObj, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-                      "/Resources << /Font << /F1 3 0 R >> >> /Contents " +
-                          std::to_string(contentObj) + " 0 R >>");
-        emit(contentObj, "<< /Length " + std::to_string(stream.size()) +
-                             " >>\nstream\n" + stream + "\nendstream");
-    }
-
-    std::size_t xref = out.size();
-    out += "xref\n0 " + std::to_string(totalObjs + 1) + "\n";
-    out += "0000000000 65535 f\r\n";
-    for (int n = 1; n <= totalObjs; n++)
-    {
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%010lu 00000 n\r\n", (unsigned long)off[n]);
-        out += buf;
-    }
-    out += "trailer\n<< /Size " + std::to_string(totalObjs + 1) +
-           " /Root 1 0 R >>\nstartxref\n" + std::to_string(xref) + "\n%%EOF";
-
-    ensureParentDir(path);
-    std::ofstream f(path, std::ios::binary);
-    if (!f)
+bool Pdf::save(const std::string &path)
+{
+    if (!ok_ || !doc_)
         return false;
-    f.write(out.data(), (std::streamsize)out.size());
-    return true;
+    ensureParentDir(path);
+    HPDF_STATUS st = HPDF_SaveToFile((HPDF_Doc)doc_, path.c_str());
+    return st == HPDF_OK && ok_;
 }

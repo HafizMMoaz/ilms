@@ -4,24 +4,43 @@
 #include <string>
 #include <vector>
 
-// A minimal, dependency-free PDF generator. It lays out monospaced text lines
-// (the standard Courier font, which needs no embedding) across one or more
-// US-Letter pages and writes a valid PDF with a correct cross-reference table.
+// PDF generator backed by libHaru (vendored under third_party/libharu).
+// Renders a branded heading (with an optional logo from assets/logo.jpg),
+// text / key-value lines, and bordered tables, paginating automatically.
+//
+// libHaru handles are kept as void* so this header stays free of <hpdf.h>.
 class Pdf
 {
-    std::vector<std::string> lines_;
+    void *doc_ = nullptr;  // HPDF_Doc
+    void *page_ = nullptr; // HPDF_Page
+    void *font_ = nullptr; // Helvetica
+    void *bold_ = nullptr; // Helvetica-Bold
+    void *mono_ = nullptr; // Courier
+    double y_ = 0;         // current baseline cursor (top-down)
+    bool ok_ = false;
+
+    void newPage();
+    void ensure(double needed);
+    void text(double x, double y, void *font, double size, const std::string &s);
 
 public:
-    void line(const std::string &text) { lines_.push_back(text); }
-    void blank() { lines_.push_back(""); }
+    Pdf();
+    ~Pdf();
+    Pdf(const Pdf &) = delete;
+    Pdf &operator=(const Pdf &) = delete;
 
-    // Appends a monospaced table: header row, a dashed separator, then the data
-    // rows, with columns auto-sized to their widest cell.
+    bool valid() const { return ok_; }
+
+    void heading(const std::string &title); // optional logo + big title + rule
+    void line(const std::string &text);
+    void keyVal(const std::string &key, const std::string &value);
+    void blank();
     void table(const std::vector<std::string> &headers,
                const std::vector<std::vector<std::string>> &rows);
+    bool save(const std::string &path);
 
-    // Writes the PDF to `path`. Returns false on failure.
-    bool save(const std::string &path) const;
+    // Called by the libHaru error handler; not for general use.
+    void markError() { ok_ = false; }
 };
 
 #endif // ILMS_PDF_H

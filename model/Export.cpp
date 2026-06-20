@@ -209,14 +209,34 @@ namespace Export
         return true;
     }
 
-    // ---- PDF variants -----------------------------------------------------
+    // ---- PDF variants (libHaru-backed: bordered tables + optional logo) ---
+    namespace
+    {
+        // Prepend a 1-based "#" column to the document's test rows.
+        std::vector<std::vector<std::string>> numbered(const std::vector<std::vector<std::string>> &src)
+        {
+            std::vector<std::vector<std::string>> out;
+            int n = 1;
+            for (const auto &t : src)
+            {
+                std::vector<std::string> row;
+                row.push_back(std::to_string(n++));
+                for (const auto &x : t)
+                    row.push_back(x);
+                out.push_back(row);
+            }
+            return out;
+        }
+    }
+
     bool tablePdf(const std::string &path, const std::string &title,
                   const std::vector<std::string> &headers,
                   const std::vector<std::vector<std::string>> &rows)
     {
         Pdf pdf;
-        pdf.line("ILMS - " + title);
-        pdf.blank();
+        if (!pdf.valid())
+            return false;
+        pdf.heading(title);
         pdf.table(headers, rows);
         pdf.blank();
         pdf.line(std::to_string(rows.size()) + " record(s).");
@@ -226,70 +246,53 @@ namespace Export
     bool invoicePdf(const std::string &path, const InvoiceDoc &d)
     {
         Pdf pdf;
-        pdf.line("ILMS - Integrated Lab Management System");
-        pdf.line("INVOICE " + d.id);
+        if (!pdf.valid())
+            return false;
+        pdf.heading("Invoice " + d.id);
+        pdf.keyVal("Date", d.date);
+        pdf.keyVal("Patient", d.patientName + " (" + d.patientId + ")");
+        pdf.keyVal("Contact", d.patientContact);
+        pdf.keyVal("Location", d.sampleLocation);
+        pdf.keyVal("Reference", d.reference);
         pdf.blank();
-        pdf.line("Date      : " + d.date);
-        pdf.line("Patient   : " + d.patientName + " (" + d.patientId + ")");
-        pdf.line("Contact   : " + d.patientContact);
-        pdf.line("Location  : " + d.sampleLocation);
-        pdf.line("Reference : " + d.reference);
+        pdf.table({"#", "Test", "Specimen", "Rate", "Status", "Result"}, numbered(d.tests));
         pdf.blank();
-        std::vector<std::vector<std::string>> r;
-        int n = 1;
-        for (const auto &t : d.tests)
-        {
-            std::vector<std::string> row;
-            row.push_back(std::to_string(n++));
-            for (const auto &x : t)
-                row.push_back(x);
-            r.push_back(row);
-        }
-        pdf.table({"#", "Test", "Specimen", "Rate", "Status", "Result"}, r);
-        pdf.blank();
-        pdf.line("Gross total : " + d.gross);
-        pdf.line("Discount    : " + d.discount + "%");
-        pdf.line("Net total   : " + d.net);
-        pdf.line("Paid        : " + d.paid);
-        pdf.line("Balance     : " + d.balance);
+        pdf.keyVal("Gross total", d.gross);
+        pdf.keyVal("Discount", d.discount + "%");
+        pdf.keyVal("Net total", d.net);
+        pdf.keyVal("Paid", d.paid);
+        pdf.keyVal("Balance", d.balance);
         return pdf.save(path);
     }
 
     bool receiptPdf(const std::string &path, const ReceiptDoc &d)
     {
         Pdf pdf;
-        pdf.line("ILMS - Payment Receipt " + d.id);
-        pdf.blank();
-        pdf.line("Date            : " + d.date);
-        pdf.line("Patient         : " + d.patientName);
-        pdf.line("Invoice         : " + d.invoiceId);
-        pdf.line("Amount paid     : " + d.amount);
-        pdf.line("Total paid so far: " + d.paidTotal);
-        pdf.line("Balance remaining: " + d.balance);
+        if (!pdf.valid())
+            return false;
+        pdf.heading("Payment Receipt " + d.id);
+        pdf.keyVal("Date", d.date);
+        pdf.keyVal("Patient", d.patientName);
+        pdf.keyVal("Invoice", d.invoiceId);
+        pdf.keyVal("Amount paid", d.amount);
+        pdf.keyVal("Total paid", d.paidTotal);
+        pdf.keyVal("Balance", d.balance);
         return pdf.save(path);
     }
 
     bool reportPdf(const std::string &path, const ReportDoc &d)
     {
         Pdf pdf;
-        pdf.line("ILMS - Laboratory Report");
+        if (!pdf.valid())
+            return false;
+        pdf.heading("Laboratory Report");
+        pdf.keyVal("Patient", d.patientName + " (" + d.patientId + ")");
+        pdf.keyVal("Gender / Age", d.gender + " / " + d.age + "   Blood: " + d.bloodGroup);
+        pdf.keyVal("Contact", d.patientContact);
+        pdf.keyVal("Reference", d.reference);
+        pdf.keyVal("Invoice / Date", d.invoiceId + "   " + d.date);
         pdf.blank();
-        pdf.line("Patient   : " + d.patientName + " (" + d.patientId + ")");
-        pdf.line("Gender/Age: " + d.gender + " / " + d.age + "   Blood: " + d.bloodGroup);
-        pdf.line("Contact   : " + d.patientContact + "   Reference: " + d.reference);
-        pdf.line("Invoice   : " + d.invoiceId + "   Date: " + d.date);
-        pdf.blank();
-        std::vector<std::vector<std::string>> r;
-        int n = 1;
-        for (const auto &t : d.tests)
-        {
-            std::vector<std::string> row;
-            row.push_back(std::to_string(n++));
-            for (const auto &x : t)
-                row.push_back(x);
-            r.push_back(row);
-        }
-        pdf.table({"#", "Test", "Result", "Unit", "Status"}, r);
+        pdf.table({"#", "Test", "Result", "Unit", "Status"}, numbered(d.tests));
         return pdf.save(path);
     }
 }

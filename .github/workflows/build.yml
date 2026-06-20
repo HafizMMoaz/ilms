@@ -30,17 +30,24 @@ jobs:
       - name: Compiler version
         run: g++ --version
 
+      # Build the vendored libHaru (no zlib/libpng) into a static lib.
+      - name: Build libHaru
+        run: |
+          gcc -c -w -O2 -Ivendor/libharu/include vendor/libharu/src/*.c
+          ar rcs libhpdf.a *.o
+          rm -f *.o
+
       # Compiles every module (verifies the whole project builds, including the
       # Windows-specific console / backup / dirent code). Mirrors build.bat.
       - name: Build ILMS
         run: |
-          g++ -std=c++17 -Wall -Wextra -Imodel -Iview -Icontroller \
+          g++ -std=c++17 -Wall -Wextra -Imodel -Iview -Icontroller -Ivendor/libharu/include \
             main.cpp \
             model/Utils.cpp model/Session.cpp model/Validator.cpp model/Database.cpp \
             model/Backup.cpp model/Logger.cpp model/Export.cpp model/Pdf.cpp \
             view/Console.cpp view/ConsoleView.cpp \
             controller/App.cpp \
-            -o ilms.exe
+            libhpdf.a -o ilms.exe
 
       # The interactive app needs a real console, so CI runs the headless model
       # tests instead: CSV parsing, ID generation, and Repository CRUD.
