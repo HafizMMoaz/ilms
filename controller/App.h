@@ -86,6 +86,15 @@ class App
     void addCompany();
     void editCompany(int i);
     void deleteCompany(int i);
+    void captureCompanyTerms(Company &c);     // share/coupon/settlement prompts
+    int companyByCoupon(const std::string &code); // index of company with that coupon, -1 if none
+
+    // Corporate share accounting + settlement.
+    void accrueShare(int companyIdx, const std::string &invoiceId, double net, int numTests);
+    void settlementsModule();
+    void settleCompany(const std::string &companyId);
+    std::string corpRoleId();             // id of the "Companies & Doctors" role
+    std::string currentUserCompanyId();   // company linked to the logged-in user (if any)
 
     // Entity modules each follow the same shape: show an interactive table,
     // then dispatch the chosen RowAction to add/edit/delete. Edit/Delete take

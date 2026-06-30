@@ -37,6 +37,9 @@ public:
     // Home-sampling service areas (named + optional coordinates).
     Repository<Area> areas{"DataBase/area.txt", "AR001"};
 
+    // Corporate share/settlement ledger (one entry per referred invoice).
+    Repository<Settlement> settlements{"DataBase/settlement.txt", "SET001"};
+
     Database();
 
     // Loads the persisted collections from disk.

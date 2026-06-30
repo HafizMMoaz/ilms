@@ -175,16 +175,25 @@ struct Query
     }
 };
 
+// A referring company or doctor. Patients referred by it get its `discount`
+// (plus a coupon's extra %). The company earns a `share` of each referred bill
+// - either a percentage of the patient-paid amount or a fixed amount per test -
+// settled every `settlementPeriod`. (Share/coupon/settlement fields are appended
+// so older company rows still load.)
 struct Company
 {
     std::string id, name, type, discount, commision, commisionPerc, patients, contact;
     std::string createdAt, updatedAt;
+    std::string shareType, shareValue;       // shareType = "PCT" | "FIXED"
+    std::string couponCode, couponPct;       // coupon -> extra % discount
+    std::string settlementPeriod;            // daily | weekly | monthly | yearly
 
     std::string toCSV() const
     {
         return id + "," + name + "," + type + "," + discount + "," + commision + "," +
                commisionPerc + "," + patients + "," + contact + "," +
-               createdAt + "," + updatedAt;
+               createdAt + "," + updatedAt + "," + shareType + "," + shareValue + "," +
+               couponCode + "," + couponPct + "," + settlementPeriod;
     }
     void fromCSV(const std::string &r)
     {
@@ -196,6 +205,39 @@ struct Company
         commisionPerc = Utils::field(r, 5);
         patients = Utils::field(r, 6);
         contact = Utils::field(r, 7);
+        createdAt = Utils::field(r, 8);
+        updatedAt = Utils::field(r, 9);
+        shareType = Utils::field(r, 10);
+        shareValue = Utils::field(r, 11);
+        couponCode = Utils::field(r, 12);
+        couponPct = Utils::field(r, 13);
+        settlementPeriod = Utils::field(r, 14);
+    }
+};
+
+// One ledger entry per corporate-referred invoice, from the lab's perspective:
+// labBalance < 0  -> the lab owes the company (lab collected, owes the share);
+// labBalance > 0  -> the company owes the lab (the doctor collected the money).
+struct Settlement
+{
+    std::string id, companyId, invoiceId, amount, labBalance, direction;
+    std::string date, settled, createdAt, updatedAt; // settled = "Y" | "N"
+
+    std::string toCSV() const
+    {
+        return id + "," + companyId + "," + invoiceId + "," + amount + "," + labBalance + "," +
+               direction + "," + date + "," + settled + "," + createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        companyId = Utils::field(r, 1);
+        invoiceId = Utils::field(r, 2);
+        amount = Utils::field(r, 3);
+        labBalance = Utils::field(r, 4);
+        direction = Utils::field(r, 5);
+        date = Utils::field(r, 6);
+        settled = Utils::field(r, 7);
         createdAt = Utils::field(r, 8);
         updatedAt = Utils::field(r, 9);
     }

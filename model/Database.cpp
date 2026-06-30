@@ -46,6 +46,7 @@ void Database::loadAll()
     areas.load();
     if (areas.empty())
         seedAreas();
+    settlements.load();
 }
 
 void Database::seedRoles()
@@ -70,7 +71,7 @@ std::vector<std::string> Database::dataFiles() const
             machines.path(), sops.path(), companies.path(),
             packages.path(), patients.path(), invoices.path(),
             patientTests.path(), payments.path(), roles.path(),
-            users.path(), areas.path()};
+            users.path(), areas.path(), settlements.path()};
 }
 
 int Database::findLogin(const std::string &username, const std::string &password) const

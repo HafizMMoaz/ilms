@@ -121,8 +121,13 @@ a real table with a search box and pager.
     and mark the test `DONE`.
   * **Patient Summary** — aggregates (patients, visits, tests, specimens
     collected/pending, results entered, billed/received/outstanding).
-* **SETUP → Corporate** — referring companies/hospitals/doctors (name, type,
-  contact, discount %, commission %); Add / Edit / Delete.
+* **SETUP → Corporate** — referring companies/doctors: discount %, a **share**
+  (% of patient-paid or fixed per test), a **coupon code** (extra % for referred
+  patients) and a **settlement period**. Registration offers None / Reference /
+  Coupon; a referred invoice accrues the company's share into a ledger.
+* **Settlements** (main menu, Admin) — nets each company's unsettled ledger
+  entries (`balance < 0` = lab pays company; `> 0` = company pays lab; the
+  direction depends on who collected the money) and clears them per period.
 * **SETUP → Test Rate List** — read-only price list of all lab tests.
 * **BACKUP / RESTORE** (main menu): *Create Backup* copies every data file into
   a new timestamped folder `Backup/backup_YYYY-MM-DD_HH-MM-SS/`; *Restore Backup*

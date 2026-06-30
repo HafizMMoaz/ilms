@@ -66,6 +66,7 @@ void App::sessionLoop()
         if (isAdmin())
         {
             menu.push_back("Users");
+            menu.push_back("Settlements");
             menu.push_back("Activity Logs");
         }
         if (isSuperAdmin())
@@ -89,6 +90,8 @@ void App::sessionLoop()
             backupModule();
         else if (choice == "Users")
             usersModule();
+        else if (choice == "Settlements")
+            settlementsModule();
         else if (choice == "Activity Logs")
             logsModule();
         else if (choice == "Roles")
@@ -1038,20 +1041,39 @@ std::string App::orderTests(const std::string &patientId)
 
     inv.reference = "SELF";
     std::string discount = "0";
-    if (view.confirm("Is this a reference patient (company/doctor)?"))
+    int refCompany = -1; // index into db.companies, -1 = self
+    int rc = view.menu("Referral", {"None (self)", "Reference company / doctor", "Coupon code"});
+    if (rc == 1 && db.companies.count() > 0)
     {
-        if (db.companies.count() > 0)
+        int ci = view.select("Select Reference", db.companies.names());
+        if (ci >= 0)
         {
-            int ci = view.select("Select Reference", db.companies.names());
-            if (ci >= 0)
-            {
-                inv.reference = db.companies.at(ci).name;
-                discount = db.companies.at(ci).discount;
-            }
+            refCompany = ci;
+            inv.reference = db.companies.at(ci).name;
+            discount = db.companies.at(ci).discount;
+        }
+    }
+    else if (rc == 2)
+    {
+        std::string code = view.ask("Coupon code");
+        int ci = companyByCoupon(code);
+        if (ci >= 0)
+        {
+            refCompany = ci;
+            Company &co = db.companies.at(ci);
+            inv.reference = co.name;
+            double base = 0, extra = 0;
+            try { base = std::stod(co.discount); } catch (...) {}
+            try { extra = std::stod(co.couponPct); } catch (...) {}
+            discount = to_string(base + extra);
+            view.message("Coupon applied: " + co.name + " (" + co.discount + "% + " +
+                         co.couponPct + "% extra = " + discount + "%)");
         }
         else
-            view.message("No company records - ordering as SELF.");
+            view.message("Invalid coupon - ordering as SELF.");
     }
+    else if (rc == 1)
+        view.message("No company records - ordering as SELF.");
 
     double gross = 0;
     if (!chooseTests(inv.id, patientId, gross, discount))
@@ -1070,6 +1092,16 @@ std::string App::orderTests(const std::string &patientId)
     db.invoices.add(inv);
     db.invoices.store();
     logAction("created invoice " + inv.id + " for patient " + patientId);
+
+    // Accrue the doctor/company share into the settlement ledger.
+    if (refCompany >= 0)
+    {
+        int nTests = 0;
+        for (int t = 0; t < db.patientTests.count(); t++)
+            if (db.patientTests.at(t).invoiceId == inv.id)
+                nTests++;
+        accrueShare(refCompany, inv.id, net, nTests);
+    }
 
     // Opening payment.
     view.clear();
@@ -2246,11 +2278,13 @@ void App::companyModule()
         for (int i = 0; i < db.companies.count(); i++)
         {
             Company &c = db.companies.at(i);
-            rows.push_back({to_string(i + 1), c.id, c.name, c.type, c.contact,
-                            c.discount + "%", c.commisionPerc + "%"});
+            std::string share = (c.shareType == "FIXED") ? (c.shareValue + "/test")
+                                                         : (c.shareValue + "%");
+            rows.push_back({to_string(i + 1), c.id, c.name, c.type,
+                            c.discount + "%", share, c.couponCode, c.settlementPeriod});
         }
 
-        std::vector<std::string> headers = {"Sr", "ID", "Name", "Type", "Contact", "Disc", "Comm"};
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Type", "Disc", "Share", "Coupon", "Settle"};
         RowAction a = view.entityTable("CORPORATE (Companies & Doctors)", headers, rows);
         switch (a.type)
         {
@@ -2285,10 +2319,26 @@ void App::addCompany()
     c.type = (ti >= 0) ? types[ti] : "Doctor";
     c.commision = "0";
     c.patients = "0";
+    captureCompanyTerms(c);
     db.companies.add(c);
     db.companies.store();
     logAction("added company " + c.id + " (" + c.name + ")");
     view.message("Company added (" + c.id + ").");
+}
+
+// Prompts for the share / coupon / settlement terms (shared by add + edit).
+void App::captureCompanyTerms(Company &c)
+{
+    int st = view.menu("Share type", {"Percentage of patient-paid", "Fixed amount per test"});
+    c.shareType = (st == 1) ? "FIXED" : "PCT";
+    c.shareValue = view.ask(c.shareType == "FIXED" ? "Share amount per test"
+                                                   : "Share percentage %");
+    auto cp = view.form("Coupon (leave blank for none)", {"Coupon code", "Coupon extra %"});
+    c.couponCode = cp[0];
+    c.couponPct = cp[1];
+    std::vector<std::string> periods = {"daily", "weekly", "monthly", "yearly"};
+    int sp = view.menu("Settlement period", periods);
+    c.settlementPeriod = periods[(sp >= 0) ? sp : 2];
 }
 
 void App::editCompany(int i)
@@ -2308,6 +2358,7 @@ void App::editCompany(int i)
     c.commisionPerc = v[3];
     if (ti >= 0)
         c.type = types[ti];
+    captureCompanyTerms(c);
     db.companies.update(i);
     logAction("updated company " + c.id);
     view.message("Company updated.");
@@ -2325,6 +2376,162 @@ void App::deleteCompany(int i)
     db.companies.store();
     logAction("deleted company " + id);
     view.message("Company deleted.");
+}
+
+int App::companyByCoupon(const std::string &code)
+{
+    if (code.empty())
+        return -1;
+    for (int i = 0; i < db.companies.count(); i++)
+        if (!db.companies.at(i).couponCode.empty() && db.companies.at(i).couponCode == code)
+            return i;
+    return -1;
+}
+
+std::string App::corpRoleId()
+{
+    for (int i = 0; i < db.roles.count(); i++)
+        if (db.roles.at(i).name == "Companies & Doctors")
+            return db.roles.at(i).id;
+    return "R003";
+}
+
+std::string App::currentUserCompanyId()
+{
+    int k = db.users.indexOf(session.id());
+    return (k >= 0) ? db.users.at(k).companyId : "";
+}
+
+// Records the company's share of a referred invoice in the settlement ledger.
+void App::accrueShare(int companyIdx, const std::string &invoiceId, double net, int numTests)
+{
+    if (companyIdx < 0 || companyIdx >= db.companies.count())
+        return;
+    Company &co = db.companies.at(companyIdx);
+
+    double v = 0;
+    try { v = std::stod(co.shareValue); } catch (...) {}
+    double share = (co.shareType == "FIXED") ? (v * numTests) : (v * net / 100.0);
+
+    // If a corporate user for THIS company collected the money, they owe the lab
+    // the remainder; otherwise the lab owes them their share.
+    bool docCollected = (session.userRole() == corpRoleId() && currentUserCompanyId() == co.id);
+    double labBalance = docCollected ? (net - share) : (-share);
+
+    Settlement s;
+    s.id = db.settlements.nextId();
+    s.companyId = co.id;
+    s.invoiceId = invoiceId;
+    s.amount = to_string(static_cast<long long>(share + 0.5));
+    s.labBalance = to_string(static_cast<long long>(labBalance + (labBalance >= 0 ? 0.5 : -0.5)));
+    s.direction = docCollected ? "DOC_OWES" : "LAB_OWES";
+    s.date = Console::date();
+    s.settled = "N";
+    db.settlements.add(s);
+    db.settlements.store();
+    logAction("accrued share " + s.amount + " for company " + co.id +
+              " on invoice " + invoiceId + " (" + s.direction + ")");
+}
+
+// ---------------------------------------------------------------------------
+// SETTLEMENTS : net each company's unsettled ledger entries and clear them.
+//   balance < 0 -> lab pays the company; balance > 0 -> the company pays the lab.
+// ---------------------------------------------------------------------------
+void App::settlementsModule()
+{
+    logAction("opened Settlements");
+    while (true)
+    {
+        db.loadAll();
+
+        std::vector<std::string> ids;
+        std::vector<long long> netBal;
+        std::vector<int> cnt;
+        for (int i = 0; i < db.settlements.count(); i++)
+        {
+            Settlement &s = db.settlements.at(i);
+            if (s.settled == "Y")
+                continue;
+            long long lb = 0;
+            try { lb = std::stoll(s.labBalance); } catch (...) {}
+            int idx = -1;
+            for (size_t k = 0; k < ids.size(); k++)
+                if (ids[k] == s.companyId) { idx = (int)k; break; }
+            if (idx < 0)
+            {
+                ids.push_back(s.companyId);
+                netBal.push_back(0);
+                cnt.push_back(0);
+                idx = (int)ids.size() - 1;
+            }
+            netBal[idx] += lb;
+            cnt[idx]++;
+        }
+
+        std::vector<std::vector<std::string>> rows;
+        for (size_t k = 0; k < ids.size(); k++)
+        {
+            std::string name = ids[k], period = "-";
+            int ck = db.companies.indexOf(ids[k]);
+            if (ck >= 0)
+            {
+                name = db.companies.at(ck).name;
+                period = db.companies.at(ck).settlementPeriod;
+            }
+            long long nb = netBal[k];
+            std::string bal = (nb < 0) ? ("lab pays " + to_string(-nb))
+                              : (nb > 0 ? ("owes lab " + to_string(nb)) : "even");
+            rows.push_back({to_string(k + 1), ids[k], name, period, to_string(cnt[k]), bal});
+        }
+
+        view.clear();
+        view.table("SETTLEMENTS (unsettled)",
+                   {"Sr", "Company", "Name", "Period", "Entries", "Balance"}, rows);
+        if (ids.empty())
+        {
+            view.message("Nothing to settle.");
+            return;
+        }
+        std::vector<std::string> opts;
+        for (size_t k = 0; k < ids.size(); k++)
+            opts.push_back(ids[k] + "  " + rows[k][2] + "  (" + rows[k][5] + ")");
+        opts.push_back("<< Back");
+        int sel = view.select("Settle a company (clears its unsettled entries)", opts);
+        if (sel < 0 || sel >= (int)ids.size())
+            return;
+        settleCompany(ids[sel]);
+    }
+}
+
+void App::settleCompany(const std::string &companyId)
+{
+    view.clear();
+    long long nb = 0;
+    int n = 0;
+    for (int i = 0; i < db.settlements.count(); i++)
+    {
+        Settlement &s = db.settlements.at(i);
+        if (s.companyId == companyId && s.settled != "Y")
+        {
+            long long lb = 0;
+            try { lb = std::stoll(s.labBalance); } catch (...) {}
+            nb += lb;
+            n++;
+        }
+    }
+    std::string who = (nb < 0) ? ("Lab pays company " + to_string(-nb))
+                      : (nb > 0 ? ("Company pays lab " + to_string(nb)) : "Nothing due");
+    if (!view.confirm("Settle " + to_string(n) + " entr(ies) for " + companyId + "?  (" + who + ")"))
+        return;
+    for (int i = 0; i < db.settlements.count(); i++)
+    {
+        Settlement &s = db.settlements.at(i);
+        if (s.companyId == companyId && s.settled != "Y")
+            s.settled = "Y";
+    }
+    db.settlements.store();
+    logAction("settled company " + companyId + " (" + to_string(n) + " entries, balance " + to_string(nb) + ")");
+    view.message("Settled " + to_string(n) + " entr(ies). " + who + ".");
 }
 
 // ---------------------------------------------------------------------------
