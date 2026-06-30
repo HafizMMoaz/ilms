@@ -51,6 +51,8 @@ void Database::loadAll()
         seedAreas();
     settlements.load();
     dispatches.load();
+    resultTemplates.load();
+    templateFields.load();
 }
 
 void Database::seedRoles()
@@ -95,7 +97,8 @@ std::vector<std::string> Database::dataFiles() const
             machines.path(), sops.path(), companies.path(),
             packages.path(), patients.path(), invoices.path(),
             patientTests.path(), payments.path(), roles.path(),
-            users.path(), areas.path(), settlements.path(), dispatches.path()};
+            users.path(), areas.path(), settlements.path(), dispatches.path(),
+            resultTemplates.path(), templateFields.path()};
 }
 
 int Database::findLogin(const std::string &username, const std::string &password) const

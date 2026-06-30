@@ -124,6 +124,20 @@ class App
     void editLabTest(int i);
     void deleteLabTest(int i);
 
+    // Dynamic result-entry templates (Setup). A ResultTemplate owns ordered
+    // TemplateField rows; a LabTest points at one. Phase 1 = define + edit
+    // templates; result-entry rendering follows in a later phase.
+    void resultTemplatesModule();
+    void addResultTemplate();
+    void editResultTemplate(int i);   // rename + manage its fields
+    void deleteResultTemplate(int i);
+    void manageTemplateFields(const std::string &templateId,
+                              const std::string &templateName);
+    void addTemplateField(const std::string &templateId);
+    void editTemplateField(int i);
+    void deleteTemplateField(int i);
+    std::string templateLabel(const std::string &templateId); // name or "(none)"
+
     void machineModule();
     void addMachine();
     void editMachine(int i);

@@ -34,6 +34,11 @@ public:
     // Dynamic roles (persisted; seeded with the built-in roles on first run).
     Repository<Role> roles{"DataBase/role.txt", "R000"};
 
+    // Dynamic result-entry templates: a ResultTemplate owns ordered TemplateField
+    // rows; a LabTest points at one via LabTest::templateId.
+    Repository<ResultTemplate> resultTemplates{"DataBase/resulttemplate.txt", "RT001"};
+    Repository<TemplateField> templateFields{"DataBase/templatefield.txt", "TF001"};
+
     // Home-sampling service areas (named + optional coordinates).
     Repository<Area> areas{"DataBase/area.txt", "AR001"};
 

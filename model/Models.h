@@ -58,12 +58,17 @@ struct LabTest
 {
     std::string id, name, rate, group, machine, unit, freq, time, comments, specimen;
     std::string createdAt, updatedAt;
+    // RBAC-style dynamic templates: which result-entry layout this test uses, and
+    // whether it is a single parameter or a Group/panel heading. Appended at the
+    // END of the CSV so older test.txt rows (without these columns) still parse.
+    std::string templateId; // FK -> ResultTemplate ("" = none/legacy)
+    std::string testType;   // "single" | "group"  ("" treated as single)
 
     std::string toCSV() const
     {
         return id + "," + name + "," + rate + "," + group + "," + machine + "," +
                unit + "," + freq + "," + time + "," + comments + "," + specimen + "," +
-               createdAt + "," + updatedAt;
+               createdAt + "," + updatedAt + "," + templateId + "," + testType;
     }
     void fromCSV(const std::string &r)
     {
@@ -79,6 +84,69 @@ struct LabTest
         specimen = Utils::field(r, 9);
         createdAt = Utils::field(r, 10);
         updatedAt = Utils::field(r, 11);
+        templateId = Utils::field(r, 12);
+        testType = Utils::field(r, 13);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Dynamic result-entry templates (replaces the old fixed result formats).
+//
+// A ResultTemplate is a reusable layout a LabTest points at. For kind="fields"
+// it owns an ordered set of TemplateField rows (the parameters to capture);
+// "narrative" and "culture" kinds are rendered specially and are filled in by
+// later phases. Mirrors the reference LIMS, but user-definable.
+// ---------------------------------------------------------------------------
+struct ResultTemplate
+{
+    std::string id, name, kind, createdAt, updatedAt; // kind = fields|narrative|culture
+
+    std::string toCSV() const
+    {
+        return id + "," + name + "," + kind + "," + createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        name = Utils::field(r, 1);
+        kind = Utils::field(r, 2);
+        createdAt = Utils::field(r, 3);
+        updatedAt = Utils::field(r, 4);
+    }
+};
+
+// One capture row inside a "fields" template. fieldType drives the result-entry
+// input: numeric (value + unit + low/high range), select (one of `options`,
+// ';'-joined to avoid CSV commas), or text (free text). refText holds a textual
+// reference range / expected value (e.g. "Negative").
+struct TemplateField
+{
+    std::string id, templateId, label, fieldType; // fieldType = numeric|text|select
+    std::string unit, refLow, refHigh, refText, options, defaultValue, sortOrder;
+    std::string createdAt, updatedAt;
+
+    std::string toCSV() const
+    {
+        return id + "," + templateId + "," + label + "," + fieldType + "," +
+               unit + "," + refLow + "," + refHigh + "," + refText + "," +
+               options + "," + defaultValue + "," + sortOrder + "," +
+               createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        templateId = Utils::field(r, 1);
+        label = Utils::field(r, 2);
+        fieldType = Utils::field(r, 3);
+        unit = Utils::field(r, 4);
+        refLow = Utils::field(r, 5);
+        refHigh = Utils::field(r, 6);
+        refText = Utils::field(r, 7);
+        options = Utils::field(r, 8);
+        defaultValue = Utils::field(r, 9);
+        sortOrder = Utils::field(r, 10);
+        createdAt = Utils::field(r, 11);
+        updatedAt = Utils::field(r, 12);
     }
 };
 

@@ -193,21 +193,22 @@ void App::setupModule()
     {
         view.clear();
         int c = view.menu("SETUP",
-                          {"Specimen", "Lab Departments", "Lab Tests", "Packages",
-                           "Test Rate List", "Machines", "SOPs", "Corporate",
+                          {"Specimen", "Lab Departments", "Lab Tests", "Result Templates",
+                           "Packages", "Test Rate List", "Machines", "SOPs", "Corporate",
                            "Sampling Areas", "Back"});
         switch (c)
         {
         case 0: specimenModule(); break;
         case 1: labDepartmentModule(); break;
         case 2: labTestModule(); break;
-        case 3: packageModule(); break;
-        case 4: rateListView(); break;
-        case 5: machineModule(); break;
-        case 6: sopModule(); break;
-        case 7: companyModule(); break;
-        case 8: areasModule(); break;
-        case 9: return;
+        case 3: resultTemplatesModule(); break;
+        case 4: packageModule(); break;
+        case 5: rateListView(); break;
+        case 6: machineModule(); break;
+        case 7: sopModule(); break;
+        case 8: companyModule(); break;
+        case 9: areasModule(); break;
+        case 10: return;
         default:
             view.message("This section is coming soon.");
         }
@@ -2005,6 +2006,14 @@ void App::addLabTest()
     int mi = view.select("Machine used", db.machines.names());
     if (mi < 0) return;
 
+    // Result-entry template (optional) + single/panel type. "(none)" = index 0.
+    std::vector<std::string> tnames = {"(none)"};
+    for (int k = 0; k < db.resultTemplates.count(); k++)
+        tnames.push_back(db.resultTemplates.at(k).name);
+    int ti = view.select("Result template", tnames);
+    std::vector<std::string> ttypes = {"single", "group"};
+    int yi = view.select("Test type", ttypes);
+
     LabTest t;
     t.id = db.labTests.nextId();
     t.name = v[0];
@@ -2016,6 +2025,8 @@ void App::addLabTest()
     t.specimen = db.specimens.at(si).name;
     t.group = db.labDepartments.at(di).name;
     t.machine = db.machines.at(mi).name;
+    t.templateId = (ti > 0) ? db.resultTemplates.at(ti - 1).id : "";
+    t.testType = (yi >= 0) ? ttypes[yi] : "single";
     db.labTests.add(t);
     db.labTests.store();
     logAction("added lab test " + t.id + " (" + t.name + ")");
@@ -2036,6 +2047,15 @@ void App::editLabTest(int i)
     int di = view.select("Department (current: " + t.group + ")", db.labDepartments.names());
     int mi = view.select("Machine (current: " + t.machine + ")", db.machines.names());
 
+    // Result template (current shown; "(none)" = index 0) + single/panel type.
+    std::vector<std::string> tnames = {"(none)"};
+    for (int k = 0; k < db.resultTemplates.count(); k++)
+        tnames.push_back(db.resultTemplates.at(k).name);
+    int ti = view.select("Result template (current: " + templateLabel(t.templateId) + ")", tnames);
+    std::vector<std::string> ttypes = {"single", "group"};
+    int yi = view.select("Test type (current: " + (t.testType.empty() ? "single" : t.testType) + ")",
+                         ttypes);
+
     t.name = v[0];
     t.rate = v[1];
     t.unit = v[2];
@@ -2045,6 +2065,8 @@ void App::editLabTest(int i)
     if (si >= 0) t.specimen = db.specimens.at(si).name;
     if (di >= 0) t.group = db.labDepartments.at(di).name;
     if (mi >= 0) t.machine = db.machines.at(mi).name;
+    if (ti >= 0) t.templateId = (ti > 0) ? db.resultTemplates.at(ti - 1).id : "";
+    if (yi >= 0) t.testType = ttypes[yi];
     db.labTests.update(i);
     logAction("updated lab test " + t.id);
     view.message("Lab test updated.");
@@ -2062,6 +2084,283 @@ void App::deleteLabTest(int i)
     db.labTests.store();
     logAction("deleted lab test " + id);
     view.message("Lab test deleted.");
+}
+
+// ---------------------------------------------------------------------------
+// RESULT TEMPLATES (Setup): user-defined result-entry layouts that replace the
+// old fixed formats. Phase 1 lets a Super Admin build templates and their
+// fields; resultEntry() will render a test's template in a later phase.
+// ---------------------------------------------------------------------------
+
+// Number of fields belonging to a template (file-scoped helper).
+static int countTemplateFields(Database &db, const std::string &templateId)
+{
+    int n = 0;
+    for (int i = 0; i < db.templateFields.count(); i++)
+        if (db.templateFields.at(i).templateId == templateId)
+            n++;
+    return n;
+}
+
+std::string App::templateLabel(const std::string &templateId)
+{
+    if (templateId.empty())
+        return "(none)";
+    int k = db.resultTemplates.indexOf(templateId);
+    return (k >= 0) ? db.resultTemplates.at(k).name : templateId;
+}
+
+void App::resultTemplatesModule()
+{
+    logAction("opened Result Templates");
+    while (true)
+    {
+        db.resultTemplates.load();
+        db.templateFields.load();
+
+        vector<vector<string>> rows;
+        for (int i = 0; i < db.resultTemplates.count(); i++)
+        {
+            ResultTemplate &t = db.resultTemplates.at(i);
+            rows.push_back({to_string(i + 1), t.id, t.name, t.kind,
+                            to_string(countTemplateFields(db, t.id))});
+        }
+        std::vector<std::string> headers = {"Sr", "ID", "Name", "Kind", "Fields"};
+        RowAction a = view.entityTable("RESULT TEMPLATES", headers, rows);
+        switch (a.type)
+        {
+        case RowAction::Add: addResultTemplate(); break;
+        case RowAction::Edit: editResultTemplate(a.index); break;
+        case RowAction::Delete: deleteResultTemplate(a.index); break;
+        case RowAction::Export: exportTable("Result Templates", headers, rows); break;
+        case RowAction::Back: return;
+        }
+    }
+}
+
+void App::addResultTemplate()
+{
+    view.clear();
+    if (db.resultTemplates.count() >= Database::MAX)
+    {
+        view.message("You have reached the maximum storage limit.");
+        return;
+    }
+    auto v = view.form("ADD RESULT TEMPLATE", {"Template Name"});
+    if (v[0].empty())
+        return;
+    std::vector<std::string> kinds = {"fields", "narrative", "culture"};
+    int ki = view.select("Template kind", kinds);
+    ResultTemplate t;
+    t.id = db.resultTemplates.nextId();
+    t.name = v[0];
+    t.kind = (ki >= 0) ? kinds[ki] : "fields";
+    db.resultTemplates.add(t);
+    db.resultTemplates.store();
+    logAction("added result template " + t.id + " (" + t.name + ")");
+    if (t.kind == "fields")
+        manageTemplateFields(t.id, t.name); // go straight to defining its fields
+    else
+        view.message("Template added (" + t.id + "). '" + t.kind +
+                     "' rendering arrives in a later phase.");
+}
+
+void App::editResultTemplate(int i)
+{
+    if (i < 0 || i >= db.resultTemplates.count())
+        return;
+    while (true)
+    {
+        ResultTemplate &t = db.resultTemplates.at(i);
+        view.clear();
+        int c = view.menu("TEMPLATE " + t.id + " - " + t.name + "  (" + t.kind + ")",
+                          {"Manage Fields", "Rename", "Back"});
+        if (c == 0)
+        {
+            if (t.kind != "fields")
+            {
+                view.message("Only 'fields' templates have editable fields in phase 1.");
+                continue;
+            }
+            manageTemplateFields(t.id, t.name);
+        }
+        else if (c == 1)
+        {
+            auto v = view.form("RENAME TEMPLATE " + t.id + "  (current: " + t.name + ")",
+                               {"New Name"});
+            if (v[0].empty())
+                continue;
+            t.name = v[0];
+            db.resultTemplates.update(i);
+            logAction("renamed result template " + t.id);
+            view.message("Template renamed.");
+        }
+        else
+            return;
+    }
+}
+
+void App::deleteResultTemplate(int i)
+{
+    if (i < 0 || i >= db.resultTemplates.count())
+        return;
+    view.clear();
+    std::string id = db.resultTemplates.at(i).id;
+    // Block deletion while any lab test still points at this template.
+    for (int k = 0; k < db.labTests.count(); k++)
+        if (db.labTests.at(k).templateId == id)
+        {
+            view.message("Cannot delete: lab test '" + db.labTests.at(k).name +
+                         "' uses this template. Reassign it first.");
+            return;
+        }
+    if (!view.confirm("Delete template " + id + " and all its fields?"))
+        return;
+    // Cascade: drop the template's fields first, then the template.
+    for (int k = db.templateFields.count() - 1; k >= 0; k--)
+        if (db.templateFields.at(k).templateId == id)
+            db.templateFields.removeAt(k);
+    db.templateFields.store();
+    db.resultTemplates.removeAt(i);
+    db.resultTemplates.store();
+    logAction("deleted result template " + id);
+    view.message("Template deleted.");
+}
+
+void App::manageTemplateFields(const std::string &templateId,
+                               const std::string &templateName)
+{
+    while (true)
+    {
+        db.templateFields.load();
+        vector<vector<string>> rows;
+        vector<int> idx; // displayed-row -> db.templateFields index (fields are filtered)
+        for (int i = 0; i < db.templateFields.count(); i++)
+        {
+            TemplateField &f = db.templateFields.at(i);
+            if (f.templateId != templateId)
+                continue;
+            std::string ref;
+            if (f.fieldType == "numeric")
+                ref = f.refLow + " - " + f.refHigh + (f.unit.empty() ? "" : " " + f.unit);
+            else if (f.fieldType == "select")
+                ref = f.options;
+            else
+                ref = f.refText;
+            rows.push_back({to_string((int)idx.size() + 1), f.label, f.fieldType, ref,
+                            f.defaultValue});
+            idx.push_back(i);
+        }
+        std::vector<std::string> headers = {"Sr", "Field", "Type", "Reference", "Default"};
+        RowAction a = view.entityTable("TEMPLATE FIELDS - " + templateName, headers, rows);
+        switch (a.type)
+        {
+        case RowAction::Add: addTemplateField(templateId); break;
+        case RowAction::Edit:
+            if (a.index >= 0 && a.index < (int)idx.size())
+                editTemplateField(idx[a.index]);
+            break;
+        case RowAction::Delete:
+            if (a.index >= 0 && a.index < (int)idx.size())
+                deleteTemplateField(idx[a.index]);
+            break;
+        case RowAction::Export: exportTable("Template Fields", headers, rows); break;
+        case RowAction::Back: return;
+        }
+    }
+}
+
+// Collects the type-specific inputs into `f` (shared by add + edit). `f.fieldType`
+// must already be set; irrelevant columns are cleared so a re-typed field is clean.
+static void fillFieldByType(View &view, TemplateField &f)
+{
+    if (f.fieldType == "numeric")
+    {
+        auto v = view.form("NUMERIC FIELD",
+                           {"Label", "Unit", "Normal Range Low", "Normal Range High",
+                            "Default Value"});
+        f.label = v[0]; f.unit = v[1]; f.refLow = v[2]; f.refHigh = v[3];
+        f.defaultValue = v[4];
+        f.refText = ""; f.options = "";
+    }
+    else if (f.fieldType == "select")
+    {
+        auto v = view.form("SELECT FIELD",
+                           {"Label", "Options (semicolon-separated)", "Default Value"});
+        f.label = v[0]; f.options = v[1]; f.defaultValue = v[2];
+        f.unit = ""; f.refLow = ""; f.refHigh = ""; f.refText = "";
+    }
+    else // text
+    {
+        auto v = view.form("TEXT FIELD",
+                           {"Label", "Reference / Expected (e.g. Negative)", "Default Value"});
+        f.label = v[0]; f.refText = v[1]; f.defaultValue = v[2];
+        f.unit = ""; f.refLow = ""; f.refHigh = ""; f.options = "";
+    }
+}
+
+void App::addTemplateField(const std::string &templateId)
+{
+    view.clear();
+    if (db.templateFields.count() >= Database::MAX)
+    {
+        view.message("You have reached the maximum storage limit.");
+        return;
+    }
+    std::vector<std::string> types = {"numeric", "select", "text"};
+    int ti = view.select("Field type", types);
+    if (ti < 0)
+        return;
+    TemplateField f;
+    f.id = db.templateFields.nextId();
+    f.templateId = templateId;
+    f.fieldType = types[ti];
+    fillFieldByType(view, f);
+    if (f.label.empty())
+    {
+        view.message("A field needs a label.");
+        return;
+    }
+    f.sortOrder = to_string(countTemplateFields(db, templateId)); // append at end
+    db.templateFields.add(f);
+    db.templateFields.store();
+    logAction("added field to template " + templateId);
+    view.message("Field added.");
+}
+
+void App::editTemplateField(int i)
+{
+    if (i < 0 || i >= db.templateFields.count())
+        return;
+    view.clear();
+    TemplateField &f = db.templateFields.at(i);
+    std::vector<std::string> types = {"numeric", "select", "text"};
+    int ti = view.select("Field type (current: " + f.fieldType + ")", types);
+    if (ti >= 0)
+        f.fieldType = types[ti];
+    fillFieldByType(view, f);
+    if (f.label.empty())
+    {
+        view.message("A field needs a label - left unchanged.");
+        return;
+    }
+    db.templateFields.update(i);
+    logAction("updated template field " + f.id);
+    view.message("Field updated.");
+}
+
+void App::deleteTemplateField(int i)
+{
+    if (i < 0 || i >= db.templateFields.count())
+        return;
+    view.clear();
+    std::string id = db.templateFields.at(i).id;
+    if (!view.confirm("Delete field '" + db.templateFields.at(i).label + "'?"))
+        return;
+    db.templateFields.removeAt(i);
+    db.templateFields.store();
+    logAction("deleted template field " + id);
+    view.message("Field deleted.");
 }
 
 // ---------------------------------------------------------------------------
