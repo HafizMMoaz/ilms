@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <string>
+#include <algorithm>
 
 using namespace std;
 
@@ -80,6 +81,8 @@ void App::sessionLoop()
             courierModule();
         else if (choice == "Collection Center")
             collectionCenterModule();
+        else if (choice == "Receive Samples")
+            receiveDispatches();
         else if (choice == "Reports")
             reportsModule();
         else if (choice == "Backup")
@@ -123,6 +126,7 @@ std::vector<std::string> App::menuForRole()
         m.push_back("Setup");
         m.push_back("Patient");
         m.push_back("Home Sampling");
+        m.push_back("Receive Samples");
         m.push_back("Reports");
         m.push_back("Backup");
         m.push_back("Users");
@@ -136,6 +140,7 @@ std::vector<std::string> App::menuForRole()
         m.push_back("Setup");
         m.push_back("Patient");
         m.push_back("Home Sampling");
+        m.push_back("Receive Samples");
         m.push_back("Reports");
         m.push_back("Settlements");
     }
@@ -146,7 +151,8 @@ std::vector<std::string> App::menuForRole()
     }
     else if (r == "Phlebotomist" || r == "Technician")
     {
-        m.push_back("Patient"); // sample receiving / result entry
+        m.push_back("Patient");          // sample receiving / result entry
+        m.push_back("Receive Samples");  // receive courier dispatches
     }
     else if (r == "Home Sampling")
     {
@@ -2772,18 +2778,218 @@ void App::doctorPortal()
 }
 
 // ---------------------------------------------------------------------------
-// COURIER / COLLECTION CENTER: sample dispatch tracking (next milestone).
+// SAMPLE DISPATCH: a batch of invoices handed off for transport.
+//   Collection Center creates (CREATED) -> Courier picks up (IN_TRANSIT) ->
+//   Lab receives (RECEIVED), which marks those invoices' specimens collected.
 // ---------------------------------------------------------------------------
-void App::courierModule()
+bool App::invoiceInOpenDispatch(const std::string &invoiceId)
 {
-    view.clear();
-    view.message("Courier portal - sample dispatch tracking is coming next.");
+    for (int i = 0; i < db.dispatches.count(); i++)
+    {
+        Dispatch &d = db.dispatches.at(i);
+        if (d.status == "RECEIVED")
+            continue;
+        for (const std::string &iv : Utils::split(d.invoiceIds, ';'))
+            if (iv == invoiceId)
+                return true;
+    }
+    return false;
 }
 
+// Collection Center: batch un-dispatched invoices that still need their
+// specimens collected, and create a dispatch.
 void App::collectionCenterModule()
 {
-    view.clear();
-    view.message("Collection Center portal - sample intake/forwarding is coming next.");
+    logAction("opened Collection Center");
+    while (true)
+    {
+        view.clear();
+        int c = view.menu("COLLECTION CENTER", {"New Dispatch", "My Dispatches", "Back"});
+        if (c == 2 || c < 0)
+            return;
+        db.loadAll();
+
+        if (c == 1) // My Dispatches
+        {
+            std::vector<std::vector<std::string>> rows;
+            for (int i = 0; i < db.dispatches.count(); i++)
+            {
+                Dispatch &d = db.dispatches.at(i);
+                int n = (int)Utils::split(d.invoiceIds, ';').size();
+                rows.push_back({d.id, d.date, d.origin, to_string(n), d.status});
+            }
+            view.clear();
+            view.table("DISPATCHES", {"ID", "Date", "Origin", "Invoices", "Status"}, rows);
+            view.message(to_string(rows.size()) + " dispatch(es).");
+            continue;
+        }
+
+        // New Dispatch: pick candidate invoices (pending specimens, not already
+        // in an open dispatch).
+        std::vector<std::string> chosen;
+        while (true)
+        {
+            std::vector<std::string> opts, ids;
+            for (int i = 0; i < db.invoices.count(); i++)
+            {
+                Invoice &inv = db.invoices.at(i);
+                bool pending = false;
+                for (int t = 0; t < db.patientTests.count(); t++)
+                    if (db.patientTests.at(t).invoiceId == inv.id &&
+                        db.patientTests.at(t).specimenTaken != "Y")
+                        pending = true;
+                if (!pending || invoiceInOpenDispatch(inv.id))
+                    continue;
+                if (std::find(chosen.begin(), chosen.end(), inv.id) != chosen.end())
+                    continue;
+                std::string pname = "?";
+                int pk = db.patients.indexOf(inv.patientId);
+                if (pk >= 0)
+                    pname = db.patients.at(pk).name;
+                opts.push_back(inv.id + "  " + pname + "  [" + inv.sampleLocation + "]");
+                ids.push_back(inv.id);
+            }
+            view.clear();
+            if (opts.empty())
+            {
+                if (chosen.empty())
+                {
+                    view.message("No samples awaiting dispatch.");
+                    break;
+                }
+            }
+            else
+                opts.push_back("");
+            opts.push_back(chosen.empty() ? "Cancel" : "Done (" + to_string(chosen.size()) + " added)");
+            int sel = view.select("Add invoice to dispatch", opts);
+            if (sel < 0 || sel >= (int)ids.size()) // Done/Cancel (or the blank)
+                break;
+            chosen.push_back(ids[sel]);
+        }
+        if (chosen.empty())
+            continue;
+
+        Dispatch d;
+        d.id = db.dispatches.nextId();
+        std::string me = session.fullName();
+        int uk = db.users.indexOf(session.id());
+        if (uk >= 0 && !db.users.at(uk).area.empty())
+            me += " (" + db.users.at(uk).area + ")";
+        d.origin = me;
+        d.status = "CREATED";
+        d.invoiceIds = Utils::join(chosen, ';');
+        d.date = Console::date();
+        db.dispatches.add(d);
+        db.dispatches.store();
+        logAction("created dispatch " + d.id + " with " + to_string((int)chosen.size()) + " invoice(s)");
+        view.message("Dispatch " + d.id + " created with " + to_string((int)chosen.size()) + " invoice(s).");
+    }
+}
+
+// Courier: pick up CREATED dispatches and carry them.
+void App::courierModule()
+{
+    logAction("opened Courier");
+    while (true)
+    {
+        view.clear();
+        int c = view.menu("COURIER", {"Available Pickups", "My In-Transit", "Back"});
+        if (c == 2 || c < 0)
+            return;
+        db.loadAll();
+
+        std::string want = (c == 0) ? "CREATED" : "IN_TRANSIT";
+        std::vector<std::string> opts, ids;
+        for (int i = 0; i < db.dispatches.count(); i++)
+        {
+            Dispatch &d = db.dispatches.at(i);
+            if (d.status != want)
+                continue;
+            if (c == 1 && d.courierId != session.id())
+                continue;
+            int n = (int)Utils::split(d.invoiceIds, ';').size();
+            opts.push_back(d.id + "  " + d.origin + "  (" + to_string(n) + " invoices)  " + d.date);
+            ids.push_back(d.id);
+        }
+        view.clear();
+        if (opts.empty())
+        {
+            view.message(c == 0 ? "No dispatches awaiting pickup." : "Nothing in transit for you.");
+            continue;
+        }
+        opts.push_back("<< Back");
+        int sel = view.select(c == 0 ? "Pick up a dispatch" : "Your in-transit dispatches", opts);
+        if (sel < 0 || sel >= (int)ids.size())
+            continue;
+        int di = db.dispatches.indexOf(ids[sel]);
+        if (di < 0)
+            continue;
+        if (c == 0)
+        {
+            db.dispatches.at(di).courierId = session.id();
+            db.dispatches.at(di).status = "IN_TRANSIT";
+            db.dispatches.update(di);
+            logAction("picked up dispatch " + ids[sel]);
+            view.message("Dispatch " + ids[sel] + " picked up. Deliver it to the lab.");
+        }
+        else
+            view.message("Dispatch " + ids[sel] + " is in transit. The lab will receive it.");
+    }
+}
+
+// Lab: receive in-transit dispatches -> mark their specimens collected.
+void App::receiveDispatches()
+{
+    logAction("opened Receive Samples");
+    while (true)
+    {
+        db.loadAll();
+        std::vector<std::string> opts, ids;
+        for (int i = 0; i < db.dispatches.count(); i++)
+        {
+            Dispatch &d = db.dispatches.at(i);
+            if (d.status != "IN_TRANSIT")
+                continue;
+            int n = (int)Utils::split(d.invoiceIds, ';').size();
+            opts.push_back(d.id + "  from " + d.origin + "  (" + to_string(n) + " invoices)");
+            ids.push_back(d.id);
+        }
+        view.clear();
+        if (opts.empty())
+        {
+            view.message("No dispatches awaiting receipt.");
+            return;
+        }
+        opts.push_back("<< Back");
+        int sel = view.select("RECEIVE SAMPLES - pick a dispatch", opts);
+        if (sel < 0 || sel >= (int)ids.size())
+            return;
+        int di = db.dispatches.indexOf(ids[sel]);
+        if (di < 0)
+            continue;
+        Dispatch &d = db.dispatches.at(di);
+        if (!view.confirm("Receive dispatch " + d.id + " and mark its specimens collected?"))
+            continue;
+
+        int marked = 0;
+        for (const std::string &iv : Utils::split(d.invoiceIds, ';'))
+            for (int t = 0; t < db.patientTests.count(); t++)
+            {
+                PatientTest &pt = db.patientTests.at(t);
+                if (pt.invoiceId == iv && pt.specimenTaken != "Y")
+                {
+                    pt.specimenTaken = "Y";
+                    marked++;
+                }
+            }
+        if (marked)
+            db.patientTests.store();
+        d.status = "RECEIVED";
+        db.dispatches.update(di);
+        logAction("received dispatch " + d.id + " (" + to_string(marked) + " specimens collected)");
+        view.message("Dispatch " + d.id + " received. " + to_string(marked) +
+                     " specimen(s) marked collected - results can now be entered.");
+    }
 }
 
 // ---------------------------------------------------------------------------

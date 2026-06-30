@@ -437,4 +437,29 @@ struct Role
     }
 };
 
+// A batch of samples handed off for transport. Carries one or more invoices.
+// Lifecycle: CREATED (collection center) -> IN_TRANSIT (courier picks up) ->
+// RECEIVED (lab) - which marks those invoices' specimens collected.
+struct Dispatch
+{
+    std::string id, origin, courierId, status, invoiceIds, date, createdAt, updatedAt;
+
+    std::string toCSV() const
+    {
+        return id + "," + origin + "," + courierId + "," + status + "," + invoiceIds + "," +
+               date + "," + createdAt + "," + updatedAt;
+    }
+    void fromCSV(const std::string &r)
+    {
+        id = Utils::field(r, 0);
+        origin = Utils::field(r, 1);
+        courierId = Utils::field(r, 2);
+        status = Utils::field(r, 3);
+        invoiceIds = Utils::field(r, 4); // ';'-joined invoice ids
+        date = Utils::field(r, 5);
+        createdAt = Utils::field(r, 6);
+        updatedAt = Utils::field(r, 7);
+    }
+};
+
 #endif // ILMS_MODELS_H

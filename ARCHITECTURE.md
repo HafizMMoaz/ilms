@@ -156,8 +156,11 @@ everything); custom roles get the Dashboard only. Specialised portals:
 
 * **Doctor Portal** (Companies & Doctors) — their referred patients + their own
   settlement balance (read-only), scoped to the user's linked company.
-* **Courier / Collection Center** — placeholders for the sample-dispatch
-  workflow (next milestone).
+* **Collection Center → Courier → Lab dispatch** — a `Dispatch` batches
+  invoices whose specimens still need collecting. **Collection Center** creates
+  it (CREATED); **Courier** picks it up (IN_TRANSIT); lab staff **Receive
+  Samples** (RECEIVED), which marks those invoices' specimens collected so
+  results can be entered.
 
 ## Reports
 

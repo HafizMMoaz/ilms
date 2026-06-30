@@ -40,6 +40,9 @@ public:
     // Corporate share/settlement ledger (one entry per referred invoice).
     Repository<Settlement> settlements{"DataBase/settlement.txt", "SET001"};
 
+    // Sample dispatches (collection center -> courier -> lab).
+    Repository<Dispatch> dispatches{"DataBase/dispatch.txt", "D001"};
+
     Database();
 
     // Loads the persisted collections from disk.

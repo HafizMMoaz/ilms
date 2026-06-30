@@ -166,10 +166,12 @@ class App
     void printSettlementReport(const std::string &companyId);
     void printPatientReport(const std::string &patientId);
 
-    // Role portals.
-    void doctorPortal();          // Companies & Doctors: their patients + settlement
-    void courierModule();         // Courier (sample dispatch - coming soon)
-    void collectionCenterModule(); // Collection Center (coming soon)
+    // Role portals + sample dispatch (collection center -> courier -> lab).
+    void doctorPortal();           // Companies & Doctors: their patients + settlement
+    void courierModule();          // Courier: pick up + carry dispatches
+    void collectionCenterModule(); // Collection Center: batch + create dispatches
+    void receiveDispatches();      // Lab: receive in-transit dispatches
+    bool invoiceInOpenDispatch(const std::string &invoiceId); // in a non-received dispatch?
 
 public:
     explicit App(View &v) : view(v) {}
