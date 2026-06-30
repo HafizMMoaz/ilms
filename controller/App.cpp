@@ -3,6 +3,7 @@
 #include "Validator.h"
 #include "Backup.h"
 #include "Export.h"
+#include "Permissions.h"
 
 #include <vector>
 #include <string>
@@ -106,9 +107,10 @@ void App::sessionLoop()
 }
 
 // ---------------------------------------------------------------------------
-// RBAC: each role sees only the modules it needs. Built-in roles have fixed
-// permission sets; custom roles get the Dashboard only (a Super Admin can grant
-// more later). Returns the top-level menu labels for the current role.
+// RBAC: the menu is built entirely from the current role's permission set
+// (Role::permissions), so a Super Admin can re-shape what any role sees from
+// the Roles editor without a code change. Custom roles start with no
+// permissions (Dashboard only) until granted.
 // ---------------------------------------------------------------------------
 std::string App::currentRoleName()
 {
@@ -116,61 +118,39 @@ std::string App::currentRoleName()
     return (k >= 0) ? db.roles.at(k).name : session.userRole();
 }
 
+bool App::can(const std::string &key)
+{
+    if (isSuperAdmin())
+        return true; // the Super Admin can never be locked out
+    int k = db.roles.indexOf(session.userRole());
+    if (k < 0)
+        return false;
+    return Permissions::has(db.roles.at(k).permissions, key);
+}
+
+bool App::canPatient()
+{
+    return can("patient.records") || can("patient.sample_receiving") ||
+           can("patient.result_entry") || can("patient.summary");
+}
+
 std::vector<std::string> App::menuForRole()
 {
-    std::string r = currentRoleName();
     std::vector<std::string> m = {"Dashboard"};
 
-    if (r == "Super Admin" || r == "Admin")
-    {
-        m.push_back("Setup");
-        m.push_back("Patient");
-        m.push_back("Home Sampling");
-        m.push_back("Receive Samples");
-        m.push_back("Reports");
-        m.push_back("Backup");
-        m.push_back("Users");
-        m.push_back("Settlements");
-        m.push_back("Activity Logs");
-        if (r == "Super Admin")
-            m.push_back("Roles");
-    }
-    else if (r == "Manager")
-    {
-        m.push_back("Setup");
-        m.push_back("Patient");
-        m.push_back("Home Sampling");
-        m.push_back("Receive Samples");
-        m.push_back("Reports");
-        m.push_back("Settlements");
-    }
-    else if (r == "Receptionist")
-    {
-        m.push_back("Patient");
-        m.push_back("Home Sampling");
-    }
-    else if (r == "Phlebotomist" || r == "Technician")
-    {
-        m.push_back("Patient");          // sample receiving / result entry
-        m.push_back("Receive Samples");  // receive courier dispatches
-    }
-    else if (r == "Home Sampling")
-    {
-        m.push_back("Home Sampling");
-    }
-    else if (r == "Companies & Doctors")
-    {
-        m.push_back("Doctor Portal");
-    }
-    else if (r == "Courier")
-    {
-        m.push_back("Courier");
-    }
-    else if (r == "Collection Center")
-    {
-        m.push_back("Collection Center");
-    }
-    // (custom roles: Dashboard only)
+    if (can("setup"))             m.push_back("Setup");
+    if (canPatient())             m.push_back("Patient");
+    if (can("home_sampling"))     m.push_back("Home Sampling");
+    if (can("receive_samples"))   m.push_back("Receive Samples");
+    if (can("doctor_portal"))     m.push_back("Doctor Portal");
+    if (can("courier"))           m.push_back("Courier");
+    if (can("collection_center")) m.push_back("Collection Center");
+    if (can("reports"))           m.push_back("Reports");
+    if (can("backup"))            m.push_back("Backup");
+    if (can("users"))             m.push_back("Users");
+    if (can("settlements"))       m.push_back("Settlements");
+    if (can("logs"))              m.push_back("Activity Logs");
+    if (can("roles"))             m.push_back("Roles");
 
     m.push_back("Logout");
     return m;
@@ -403,10 +383,17 @@ void App::rolesModule()
         for (int i = 0; i < db.roles.count(); i++)
         {
             Role &r = db.roles.at(i);
+            int granted = 0;
+            for (const auto &p : Permissions::catalog())
+                if (Permissions::has(r.permissions, p.first))
+                    granted++;
+            std::string access = (r.name == "Super Admin")
+                                     ? "all"
+                                     : to_string(granted) + "/" + to_string((int)Permissions::catalog().size());
             rows.push_back({to_string(i + 1), r.id, r.name,
-                            (r.fixed == "Y") ? "built-in" : "custom"});
+                            (r.fixed == "Y") ? "built-in" : "custom", access});
         }
-        std::vector<std::string> headers = {"Sr", "ID", "Role", "Type"};
+        std::vector<std::string> headers = {"Sr", "ID", "Role", "Type", "Access"};
         RowAction a = view.entityTable("ROLES  (Super Admin)", headers, rows);
         switch (a.type)
         {
@@ -432,28 +419,100 @@ void App::addRole()
     r.id = db.roles.nextId();
     r.name = v[0];
     r.fixed = "N";
+    r.permissions = Permissions::defaultsFor(r.name); // "" -> Dashboard only until granted
     db.roles.add(r);
     db.roles.store();
     logAction("added role " + r.id + " (" + r.name + ")");
-    view.message("Role added (" + r.id + ").");
+    view.message("Role added (" + r.id + "). Use Edit > Permissions to grant access.");
 }
 
+// A role's name is fixed for built-ins, but its PERMISSIONS are always editable
+// (that is the point of RBAC) - except the Super Admin, which is locked to all.
 void App::editRole(int i)
 {
     if (i < 0 || i >= db.roles.count())
         return;
-    view.clear();
-    Role &r = db.roles.at(i);
-    if (r.fixed == "Y")
+    while (true)
     {
-        view.message("Built-in roles cannot be edited.");
+        Role &r = db.roles.at(i);
+        std::string tag = (r.fixed == "Y") ? "built-in" : "custom";
+        view.clear();
+        int c = view.menu("ROLE " + r.id + " - " + r.name + "  (" + tag + ")",
+                          {"Edit Permissions", "Rename", "Back"});
+        if (c == 0)
+        {
+            editRolePermissions(i);
+        }
+        else if (c == 1)
+        {
+            if (r.fixed == "Y")
+            {
+                view.message("Built-in roles cannot be renamed.");
+                continue;
+            }
+            auto v = view.form("RENAME ROLE " + r.id + "  (current: " + r.name + ")", {"New Name"});
+            if (v[0].empty())
+                continue;
+            r.name = v[0];
+            db.roles.update(i);
+            logAction("renamed role " + r.id + " to " + r.name);
+            view.message("Role renamed.");
+        }
+        else
+            return;
+    }
+}
+
+// Toggle editor over the permission catalogue. Built on the plain menu widget:
+// each catalogue entry is shown with a [x]/[ ] checkbox; selecting it flips the
+// box, and the two trailing rows commit or discard.
+void App::editRolePermissions(int i)
+{
+    if (i < 0 || i >= db.roles.count())
+        return;
+    Role &r = db.roles.at(i);
+    if (r.name == "Super Admin")
+    {
+        view.message("Super Admin always holds every permission; it cannot be restricted.");
         return;
     }
-    auto v = view.form("EDIT ROLE " + r.id + "  (current: " + r.name + ")", {"New Name"});
-    r.name = v[0];
-    db.roles.update(i);
-    logAction("updated role " + r.id);
-    view.message("Role updated.");
+
+    auto cat = Permissions::catalog();
+    std::vector<bool> on(cat.size());
+    for (size_t k = 0; k < cat.size(); k++)
+        on[k] = Permissions::has(r.permissions, cat[k].first);
+
+    const int nCat = static_cast<int>(cat.size());
+    while (true)
+    {
+        std::vector<std::string> opts;
+        for (int k = 0; k < nCat; k++)
+            opts.push_back(std::string("[") + (on[k] ? "x" : " ") + "] " + cat[k].second);
+        opts.push_back("== Save ==");
+        opts.push_back("== Cancel ==");
+
+        view.clear();
+        int c = view.menu("PERMISSIONS - " + r.name + "   (Enter toggles, then Save)", opts);
+        if (c < 0 || c == nCat + 1)
+            return; // Cancel / out of range
+        if (c == nCat)  // Save
+        {
+            std::string joined;
+            for (int k = 0; k < nCat; k++)
+                if (on[k])
+                {
+                    if (!joined.empty())
+                        joined += ";";
+                    joined += cat[k].first;
+                }
+            r.permissions = joined;
+            db.roles.update(i); // stamps updatedAt + persists
+            logAction("set permissions for role " + r.id);
+            view.message("Permissions saved.");
+            return;
+        }
+        on[c] = !on[c]; // toggle the chosen permission
+    }
 }
 
 void App::deleteRole(int i)
@@ -738,18 +797,26 @@ void App::patientModule()
 {
     while (true)
     {
+        // Sub-menu is gated per patient.* permission, so e.g. a Phlebotomist
+        // sees only "Sample Receiving" while a Receptionist sees Records +
+        // Summary. Labels and their handlers are kept in step via `actions`.
+        std::vector<std::string> labels;
+        std::vector<void (App::*)()> actions;
+        if (can("patient.records"))
+        { labels.push_back("Patient Records");  actions.push_back(&App::patientRecords); }
+        if (can("patient.sample_receiving"))
+        { labels.push_back("Sample Receiving"); actions.push_back(&App::sampleReceiving); }
+        if (can("patient.result_entry"))
+        { labels.push_back("Result Entry");     actions.push_back(&App::resultEntry); }
+        if (can("patient.summary"))
+        { labels.push_back("Patient Summary");  actions.push_back(&App::patientSummary); }
+        labels.push_back("Back");
+
         view.clear();
-        int c = view.menu("PATIENT",
-                          {"Patient Records", "Sample Receiving", "Result Entry",
-                           "Patient Summary", "Back"});
-        switch (c)
-        {
-        case 0: patientRecords(); break;
-        case 1: sampleReceiving(); break;
-        case 2: resultEntry(); break;
-        case 3: patientSummary(); break;
-        default: return;
-        }
+        int c = view.menu("PATIENT", labels);
+        if (c < 0 || c >= (int)actions.size())
+            return; // "Back" (or out of range)
+        (this->*actions[c])();
     }
 }
 

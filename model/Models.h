@@ -422,10 +422,11 @@ struct Area
 struct Role
 {
     std::string id, name, fixed, createdAt, updatedAt; // fixed = "Y" / "N"
+    std::string permissions;                           // ';'-joined permission keys
 
     std::string toCSV() const
     {
-        return id + "," + name + "," + fixed + "," + createdAt + "," + updatedAt;
+        return id + "," + name + "," + fixed + "," + createdAt + "," + updatedAt + "," + permissions;
     }
     void fromCSV(const std::string &r)
     {
@@ -434,6 +435,7 @@ struct Role
         fixed = Utils::field(r, 2);
         createdAt = Utils::field(r, 3);
         updatedAt = Utils::field(r, 4);
+        permissions = Utils::field(r, 5);
     }
 };
 

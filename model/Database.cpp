@@ -1,4 +1,5 @@
 #include "Database.h"
+#include "Permissions.h"
 
 Database::Database() {}
 
@@ -40,6 +41,8 @@ void Database::loadAll()
     roles.load();
     if (roles.empty())
         seedRoles();
+    else
+        backfillRolePermissions();
     users.load();
     if (users.empty())
         seedUsers();
@@ -61,9 +64,29 @@ void Database::seedRoles()
         r.id = "R00" + std::to_string(i); // R000 .. R009
         r.name = names[i];
         r.fixed = "Y";
+        r.permissions = Permissions::defaultsFor(r.name);
         roles.add(r);
     }
     roles.store();
+}
+
+// Migration for a role.txt written before the permissions column existed: any
+// built-in role with an empty permission set is refilled from its defaults, so
+// upgrading an existing install doesn't lock its users out of every module.
+void Database::backfillRolePermissions()
+{
+    bool changed = false;
+    for (int i = 0; i < roles.count(); i++)
+    {
+        Role &r = roles.at(i);
+        if (r.fixed == "Y" && r.permissions.empty())
+        {
+            r.permissions = Permissions::defaultsFor(r.name);
+            changed = true;
+        }
+    }
+    if (changed)
+        roles.store();
 }
 
 std::vector<std::string> Database::dataFiles() const

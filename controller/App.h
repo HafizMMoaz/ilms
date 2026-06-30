@@ -37,6 +37,11 @@ class App
     // Super Admin (R009) only - manages roles.
     bool isSuperAdmin() const { return session.userRole() == "R009"; }
 
+    // RBAC core: true if the logged-in user's role grants `key`. The Super Admin
+    // always passes (so it can never be locked out of its own editor).
+    bool can(const std::string &key);
+    bool canPatient(); // any patient.* sub-permission (gates the Patient menu)
+
     // RBAC: resolve the current user's role name and the menu they may use.
     std::string currentRoleName();
     std::vector<std::string> menuForRole();
@@ -64,6 +69,7 @@ class App
     void rolesModule();
     void addRole();
     void editRole(int i);
+    void editRolePermissions(int i); // toggle the role's permission set
     void deleteRole(int i);
 
     // Users management (Admin / Super Admin).

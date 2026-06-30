@@ -56,6 +56,7 @@ public:
 
 private:
     void seedRoles(); // writes the built-in roles when role.txt is empty
+    void backfillRolePermissions(); // refills empty perms on legacy role.txt
     void seedUsers(); // writes the default accounts when user.txt is empty
     void seedAreas(); // writes a few example areas when area.txt is empty
 };
