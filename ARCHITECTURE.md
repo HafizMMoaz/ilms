@@ -147,6 +147,27 @@ a real table with a search box and pager.
   built without zlib/libpng) — so documents have **bordered tables** and an
   optional **logo** (`assets/logo.jpg`). They open via `Console::openFile`.
 
+## Role-based access (RBAC) & portals
+
+The main menu is built from the logged-in user's role (`App::menuForRole()`).
+Built-in roles have fixed permission sets (e.g. Receptionist → Patient + Home
+Sampling; Manager → Setup/Patient/Reports/Settlements; Admin/Super Admin →
+everything); custom roles get the Dashboard only. Specialised portals:
+
+* **Doctor Portal** (Companies & Doctors) — their referred patients + their own
+  settlement balance (read-only), scoped to the user's linked company.
+* **Courier / Collection Center** — placeholders for the sample-dispatch
+  workflow (next milestone).
+
+## Reports
+
+* **Settlement report** (Settlements → pick company → *Print settlement report*)
+  — PDF of a company's ledger + outstanding balance.
+* **Patient report** (Manage patient → *Patient Report (PDF)*) — every visit's
+  tests/results plus billed/received/balance.
+
+Both use `Export::documentPdf` (libHaru).
+
 ## Roles, Users & Areas
 
 * **Roles** (main menu, **Super Admin** only) — a persisted, dynamic role list

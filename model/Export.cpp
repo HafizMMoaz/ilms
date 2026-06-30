@@ -280,6 +280,30 @@ namespace Export
         return pdf.save(path);
     }
 
+    bool documentPdf(const std::string &path, const std::string &title,
+                     const std::vector<std::vector<std::string>> &info,
+                     const std::vector<std::string> &headers,
+                     const std::vector<std::vector<std::string>> &rows,
+                     const std::vector<std::string> &footer)
+    {
+        Pdf pdf;
+        if (!pdf.valid())
+            return false;
+        pdf.heading(title);
+        for (const auto &kv : info)
+            if (kv.size() >= 2)
+                pdf.keyVal(kv[0], kv[1]);
+        if (!info.empty())
+            pdf.blank();
+        if (!headers.empty())
+            pdf.table(headers, rows);
+        if (!footer.empty())
+            pdf.blank();
+        for (const auto &f : footer)
+            pdf.line(f);
+        return pdf.save(path);
+    }
+
     bool reportPdf(const std::string &path, const ReportDoc &d)
     {
         Pdf pdf;

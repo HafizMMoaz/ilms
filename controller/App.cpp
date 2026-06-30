@@ -60,20 +60,10 @@ void App::sessionLoop()
         stats.packages = db.packages.count();
         stats.companies = db.companies.count();
 
-        // The menu is built dynamically (admins get an extra entry), so we
-        // dispatch on the chosen label rather than a fixed index.
-        std::vector<std::string> menu = {"Dashboard", "Setup", "Patient", "Home Sampling", "Reports", "Backup"};
-        if (isAdmin())
-        {
-            menu.push_back("Users");
-            menu.push_back("Settlements");
-            menu.push_back("Activity Logs");
-        }
-        if (isSuperAdmin())
-            menu.push_back("Roles");
-        menu.push_back("Logout");
-
-        int c = view.dashboardScreen(session.fullName(), stats, menu);
+        // The menu is built from the user's role (RBAC), then dispatched by label.
+        std::vector<std::string> menu = menuForRole();
+        int c = view.dashboardScreen(session.fullName() + "  [" + currentRoleName() + "]",
+                                     stats, menu);
         std::string choice = (c >= 0 && c < (int)menu.size()) ? menu[c] : "Logout";
 
         if (choice == "Dashboard")
@@ -84,6 +74,12 @@ void App::sessionLoop()
             patientModule();
         else if (choice == "Home Sampling")
             homeSamplingModule();
+        else if (choice == "Doctor Portal")
+            doctorPortal();
+        else if (choice == "Courier")
+            courierModule();
+        else if (choice == "Collection Center")
+            collectionCenterModule();
         else if (choice == "Reports")
             reportsModule();
         else if (choice == "Backup")
@@ -104,6 +100,74 @@ void App::sessionLoop()
             session.end();
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// RBAC: each role sees only the modules it needs. Built-in roles have fixed
+// permission sets; custom roles get the Dashboard only (a Super Admin can grant
+// more later). Returns the top-level menu labels for the current role.
+// ---------------------------------------------------------------------------
+std::string App::currentRoleName()
+{
+    int k = db.roles.indexOf(session.userRole());
+    return (k >= 0) ? db.roles.at(k).name : session.userRole();
+}
+
+std::vector<std::string> App::menuForRole()
+{
+    std::string r = currentRoleName();
+    std::vector<std::string> m = {"Dashboard"};
+
+    if (r == "Super Admin" || r == "Admin")
+    {
+        m.push_back("Setup");
+        m.push_back("Patient");
+        m.push_back("Home Sampling");
+        m.push_back("Reports");
+        m.push_back("Backup");
+        m.push_back("Users");
+        m.push_back("Settlements");
+        m.push_back("Activity Logs");
+        if (r == "Super Admin")
+            m.push_back("Roles");
+    }
+    else if (r == "Manager")
+    {
+        m.push_back("Setup");
+        m.push_back("Patient");
+        m.push_back("Home Sampling");
+        m.push_back("Reports");
+        m.push_back("Settlements");
+    }
+    else if (r == "Receptionist")
+    {
+        m.push_back("Patient");
+        m.push_back("Home Sampling");
+    }
+    else if (r == "Phlebotomist" || r == "Technician")
+    {
+        m.push_back("Patient"); // sample receiving / result entry
+    }
+    else if (r == "Home Sampling")
+    {
+        m.push_back("Home Sampling");
+    }
+    else if (r == "Companies & Doctors")
+    {
+        m.push_back("Doctor Portal");
+    }
+    else if (r == "Courier")
+    {
+        m.push_back("Courier");
+    }
+    else if (r == "Collection Center")
+    {
+        m.push_back("Collection Center");
+    }
+    // (custom roles: Dashboard only)
+
+    m.push_back("Logout");
+    return m;
 }
 
 // ---------------------------------------------------------------------------
@@ -1218,11 +1282,14 @@ void App::managePatient(int i)
     {
         view.clear();
         int c = view.menu("PATIENT " + pid + " - " + pname,
-                          {"New Visit (order tests)", "Invoices & Payments", "Back"});
+                          {"New Visit (order tests)", "Invoices & Payments",
+                           "Patient Report (PDF)", "Back"});
         if (c == 0)
             orderTests(pid);
         else if (c == 1)
             patientInvoices(pid);
+        else if (c == 2)
+            printPatientReport(pid);
         else
             return;
     }
@@ -2496,10 +2563,15 @@ void App::settlementsModule()
         for (size_t k = 0; k < ids.size(); k++)
             opts.push_back(ids[k] + "  " + rows[k][2] + "  (" + rows[k][5] + ")");
         opts.push_back("<< Back");
-        int sel = view.select("Settle a company (clears its unsettled entries)", opts);
+        int sel = view.select("Pick a company", opts);
         if (sel < 0 || sel >= (int)ids.size())
             return;
-        settleCompany(ids[sel]);
+        int act = view.menu("Company " + ids[sel],
+                            {"Settle now", "Print settlement report", "Back"});
+        if (act == 0)
+            settleCompany(ids[sel]);
+        else if (act == 1)
+            printSettlementReport(ids[sel]);
     }
 }
 
@@ -2532,6 +2604,186 @@ void App::settleCompany(const std::string &companyId)
     db.settlements.store();
     logAction("settled company " + companyId + " (" + to_string(n) + " entries, balance " + to_string(nb) + ")");
     view.message("Settled " + to_string(n) + " entr(ies). " + who + ".");
+}
+
+// A printable PDF of one company's settlement ledger.
+void App::printSettlementReport(const std::string &companyId)
+{
+    int ck = db.companies.indexOf(companyId);
+    std::string name = (ck >= 0) ? db.companies.at(ck).name : companyId;
+    std::string period = (ck >= 0) ? db.companies.at(ck).settlementPeriod : "-";
+
+    std::vector<std::vector<std::string>> rows;
+    long long open = 0;
+    int openN = 0, settledN = 0;
+    for (int i = 0; i < db.settlements.count(); i++)
+    {
+        Settlement &s = db.settlements.at(i);
+        if (s.companyId != companyId)
+            continue;
+        long long lb = 0;
+        try { lb = std::stoll(s.labBalance); } catch (...) {}
+        if (s.settled == "Y")
+            settledN++;
+        else { open += lb; openN++; }
+        rows.push_back({s.date, s.invoiceId, s.amount, s.direction, s.labBalance,
+                        (s.settled == "Y" ? "settled" : "open")});
+    }
+    std::string netLine = (open < 0) ? ("Outstanding: lab pays company " + to_string(-open))
+                          : (open > 0 ? ("Outstanding: company owes lab " + to_string(open))
+                                      : "Outstanding: nil");
+
+    std::vector<std::vector<std::string>> info = {
+        {"Company", companyId}, {"Name", name}, {"Period", period}, {"Date", Console::date()}};
+    std::vector<std::string> footer = {
+        netLine, to_string(openN) + " open / " + to_string(settledN) + " settled entr(ies)"};
+
+    std::string path = "Exports/settlement_" + companyId + ".pdf";
+    if (!Export::documentPdf(path, "Settlement Report - " + name, info,
+                             {"Date", "Invoice", "Share", "Direction", "LabBal", "Status"},
+                             rows, footer))
+    {
+        view.message("Could not write the settlement report.");
+        return;
+    }
+    logAction("generated settlement report for " + companyId);
+    if (view.confirm("Settlement report saved to " + path + ".  Open / print now?"))
+        Console::openFile(path);
+}
+
+// A full PDF of a patient: every visit's tests, results and billing.
+void App::printPatientReport(const std::string &patientId)
+{
+    int pk = db.patients.indexOf(patientId);
+    if (pk < 0)
+        return;
+    Patient &p = db.patients.at(pk);
+
+    std::vector<std::vector<std::string>> rows;
+    long long billed = 0, paid = 0;
+    for (int i = 0; i < db.invoices.count(); i++)
+    {
+        Invoice &inv = db.invoices.at(i);
+        if (inv.patientId != patientId)
+            continue;
+        billed += static_cast<long long>(invoiceNet(inv.id) + 0.5);
+        paid += static_cast<long long>(invoicePaid(inv.id) + 0.5);
+        for (int t = 0; t < db.patientTests.count(); t++)
+        {
+            PatientTest &pt = db.patientTests.at(t);
+            if (pt.invoiceId == inv.id)
+                rows.push_back({inv.id, inv.date, pt.testName, pt.result, pt.status, pt.rate});
+        }
+    }
+    long long bal = billed - paid;
+
+    std::vector<std::vector<std::string>> info = {
+        {"Patient", p.id}, {"Name", p.name}, {"CNIC", p.cnic}, {"Contact", p.contact},
+        {"Gender / Age", p.gender + " / " + p.age}, {"Blood", p.bloodGroup}, {"Date", Console::date()}};
+    std::vector<std::string> footer = {
+        "Total billed : " + to_string(billed),
+        "Received     : " + to_string(paid),
+        "Balance      : " + to_string(bal > 0 ? bal : 0)};
+
+    std::string path = "Exports/patient_report_" + patientId + ".pdf";
+    if (!Export::documentPdf(path, "Patient Report - " + p.name, info,
+                             {"Invoice", "Date", "Test", "Result", "Status", "Rate"},
+                             rows, footer))
+    {
+        view.message("Could not write the patient report.");
+        return;
+    }
+    logAction("generated patient report for " + patientId);
+    if (view.confirm("Patient report saved to " + path + ".  Open / print now?"))
+        Console::openFile(path);
+}
+
+// ---------------------------------------------------------------------------
+// DOCTOR / CORPORATE PORTAL: a Companies & Doctors user sees their referred
+// patients and their own settlement balance (read-only).
+// ---------------------------------------------------------------------------
+void App::doctorPortal()
+{
+    logAction("opened Doctor Portal");
+    std::string companyId = currentUserCompanyId();
+    if (companyId.empty())
+    {
+        view.clear();
+        view.message("Your account is not linked to a company/doctor. Ask an admin.");
+        return;
+    }
+    int ck = db.companies.indexOf(companyId);
+    std::string cname = (ck >= 0) ? db.companies.at(ck).name : companyId;
+
+    while (true)
+    {
+        view.clear();
+        int c = view.menu("DOCTOR PORTAL - " + cname,
+                          {"My Referred Patients", "My Settlement", "Back"});
+        if (c == 2 || c < 0)
+            return;
+
+        db.loadAll();
+        if (c == 0)
+        {
+            std::vector<std::vector<std::string>> rows;
+            for (int i = 0; i < db.invoices.count(); i++)
+            {
+                Invoice &inv = db.invoices.at(i);
+                if (inv.reference != cname)
+                    continue;
+                std::string pname = "?";
+                int pidx = db.patients.indexOf(inv.patientId);
+                if (pidx >= 0)
+                    pname = db.patients.at(pidx).name;
+                long long bal = static_cast<long long>(invoiceNet(inv.id) - invoicePaid(inv.id) + 0.5);
+                rows.push_back({inv.id, inv.date, pname, inv.netTotal, to_string(bal > 0 ? bal : 0)});
+            }
+            view.clear();
+            view.table("MY REFERRED PATIENTS (" + cname + ")",
+                       {"Invoice", "Date", "Patient", "Net", "Balance"}, rows);
+            view.message(to_string(rows.size()) + " referred visit(s).");
+        }
+        else // My Settlement
+        {
+            std::vector<std::vector<std::string>> rows;
+            long long open = 0;
+            for (int i = 0; i < db.settlements.count(); i++)
+            {
+                Settlement &s = db.settlements.at(i);
+                if (s.companyId != companyId)
+                    continue;
+                long long lb = 0;
+                try { lb = std::stoll(s.labBalance); } catch (...) {}
+                if (s.settled != "Y")
+                    open += lb;
+                rows.push_back({s.date, s.invoiceId, s.amount, s.direction,
+                                (s.settled == "Y" ? "settled" : "open")});
+            }
+            view.clear();
+            view.table("MY SETTLEMENT (" + cname + ")",
+                       {"Date", "Invoice", "Share", "Direction", "Status"}, rows);
+            std::string msg = (open < 0) ? ("Lab owes you " + to_string(-open))
+                              : (open > 0 ? ("You owe the lab " + to_string(open))
+                                          : "Nothing outstanding");
+            view.message(msg + ".");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// COURIER / COLLECTION CENTER: sample dispatch tracking (next milestone).
+// ---------------------------------------------------------------------------
+void App::courierModule()
+{
+    view.clear();
+    view.message("Courier portal - sample dispatch tracking is coming next.");
+}
+
+void App::collectionCenterModule()
+{
+    view.clear();
+    view.message("Collection Center portal - sample intake/forwarding is coming next.");
 }
 
 // ---------------------------------------------------------------------------

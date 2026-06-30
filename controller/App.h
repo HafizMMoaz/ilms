@@ -37,6 +37,10 @@ class App
     // Super Admin (R009) only - manages roles.
     bool isSuperAdmin() const { return session.userRole() == "R009"; }
 
+    // RBAC: resolve the current user's role name and the menu they may use.
+    std::string currentRoleName();
+    std::vector<std::string> menuForRole();
+
     // flow
     bool login();
     void sessionLoop();
@@ -159,6 +163,13 @@ class App
     void printInvoice(const std::string &invoiceId);
     void printReceipt(const std::string &invoiceId, const std::string &paymentId);
     void printReport(const std::string &invoiceId);
+    void printSettlementReport(const std::string &companyId);
+    void printPatientReport(const std::string &patientId);
+
+    // Role portals.
+    void doctorPortal();          // Companies & Doctors: their patients + settlement
+    void courierModule();         // Courier (sample dispatch - coming soon)
+    void collectionCenterModule(); // Collection Center (coming soon)
 
 public:
     explicit App(View &v) : view(v) {}

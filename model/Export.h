@@ -49,6 +49,14 @@ namespace Export
     bool invoicePdf(const std::string &path, const InvoiceDoc &d);
     bool receiptPdf(const std::string &path, const ReceiptDoc &d);
     bool reportPdf(const std::string &path, const ReportDoc &d);
+
+    // Generic report PDF: title + key/value info lines + a table + footer lines.
+    // Used for settlement reports and full patient reports.
+    bool documentPdf(const std::string &path, const std::string &title,
+                     const std::vector<std::vector<std::string>> &info, // each {key, value}
+                     const std::vector<std::string> &headers,
+                     const std::vector<std::vector<std::string>> &rows,
+                     const std::vector<std::string> &footer);
 }
 
 #endif // ILMS_EXPORT_H
